@@ -1,4 +1,5 @@
 # Documentos de trabajo locales: no deben versionarse
-/*.pdf
-/docs/*.md
-/docs/*.pdf
+/Especificacion_Tecnica_KDS_v1.0.pdf
+/Guia_Tecnica_Implementacion_KDS_v1.0.pdf
+/docs/ANALISIS_DISPLAY_COCINA.md
+/docs/BITACORA_DISPLAY_COCINA.md
