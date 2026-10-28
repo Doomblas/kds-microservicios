@@ -14,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -81,7 +83,7 @@ public class OrdenCocinaService {
         OrdenCocina guardada = ordenCocinaRepository.save(orden);
         OrdenCocinaResponse respuesta = aRespuesta(guardada);
 
-        eventPublisher.notificarPedidoCreado(respuesta);
+        notificarPedidoCreadoTrasCommit(respuesta);
         log.info("Orden de cocina creada: ordenId={}, pedidoId={}, numeroPedido={}",
                 guardada.getId(), guardada.getPedidoId(), guardada.getNumeroPedido());
 
@@ -123,11 +125,40 @@ public class OrdenCocinaService {
         OrdenCocina actualizada = ordenCocinaRepository.save(orden);
         OrdenCocinaResponse respuesta = aRespuesta(actualizada);
 
-        eventPublisher.publicarEstadoActualizado(respuesta, ahora);
+        publicarEstadoTrasCommit(respuesta, ahora);
         log.info("Estado de orden actualizado: ordenId={}, pedidoId={}, estado={}",
                 actualizada.getId(), actualizada.getPedidoId(), actualizada.getEstado());
 
         return respuesta;
+    }
+
+    private void notificarPedidoCreadoTrasCommit(OrdenCocinaResponse respuesta) {
+        ejecutarTrasCommit(() -> eventPublisher.notificarPedidoCreado(respuesta));
+    }
+
+    private void publicarEstadoTrasCommit(
+            OrdenCocinaResponse respuesta, LocalDateTime fechaActualizacion) {
+        ejecutarTrasCommit(() ->
+                eventPublisher.publicarEstadoActualizado(respuesta, fechaActualizacion));
+    }
+
+    /**
+     * Las notificaciones se emiten despues del commit para que el frontend no
+     * consulte un estado que todavia no es visible en cocina_db. En pruebas
+     * unitarias no hay transaccion activa y se ejecuta de inmediato.
+     */
+    private void ejecutarTrasCommit(Runnable accion) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            accion.run();
+                        }
+                    });
+        } else {
+            accion.run();
+        }
     }
 
     private OrdenCocina buscarOrden(Long id) {
