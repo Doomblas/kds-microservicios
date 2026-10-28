@@ -1,0 +1,4 @@
+# Documentos de trabajo locales: no deben versionarse
+/*.pdf
+/docs/*.md
+/docs/*.pdf
