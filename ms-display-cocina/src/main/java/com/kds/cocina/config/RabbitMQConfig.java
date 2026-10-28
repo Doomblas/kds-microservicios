@@ -44,6 +44,8 @@ public class RabbitMQConfig {
      */
     @Bean
     public MessageConverter jsonMessageConverter(JsonMapper jsonMapper) {
-        return new JacksonJsonMessageConverter(jsonMapper);
+        JacksonJsonMessageConverter converter = new JacksonJsonMessageConverter(jsonMapper);
+        converter.getJavaTypeMapper().addTrustedPackages("com.kds.cocina.dto");
+        return converter;
     }
 }
