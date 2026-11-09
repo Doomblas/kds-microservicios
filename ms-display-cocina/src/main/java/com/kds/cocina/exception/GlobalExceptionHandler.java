@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
 
@@ -51,6 +52,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> manejarArgumentoInvalido(
             IllegalArgumentException ex, HttpServletRequest request) {
         return construir(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+    }
+
+    /**
+     * Spring usa esta excepcion cuando la ruta no corresponde a ningun endpoint
+     * ni a un recurso estatico. Sin este manejador, el catch-all la convertiria
+     * en un 500.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> manejarRutaNoEncontrada(
+            NoResourceFoundException ex, HttpServletRequest request) {
+        return construir(HttpStatus.NOT_FOUND, "Recurso no encontrado", request);
     }
 
     @ExceptionHandler(Exception.class)
