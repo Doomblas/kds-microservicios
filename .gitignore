@@ -1,0 +1,9 @@
+# Documentos de trabajo locales: no deben versionarse
+/Especificacion_Tecnica_KDS_v1.0.pdf
+/Guia_Tecnica_Implementacion_KDS_v1.0.pdf
+/docs/ANALISIS_DISPLAY_COCINA.md
+/docs/BITACORA_DISPLAY_COCINA.md
+/docs/CHECKLIST_DISPLAY_COCINA.md
+
+# Carpeta local de referencias visuales
+/referencia-st/
