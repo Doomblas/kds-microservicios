@@ -797,7 +797,7 @@ Notas:
 
 ---
 
-## 11. Puntos de atención
+## 10. Puntos de atención
 
 - **Content-Type:** los eventos deben viajar como JSON con
   `contentType=application/json`. El listener no acepta `text/plain`.
@@ -816,7 +816,7 @@ Notas:
 
 ---
 
-## 12. Contacto
+## 11. Contacto
 
 Responsable de `ms-display-cocina`: Marco.
 Cualquier cambio en los contratos de eventos debe coordinarse con Pedidos y
