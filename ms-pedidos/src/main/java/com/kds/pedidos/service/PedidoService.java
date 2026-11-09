@@ -1,5 +1,6 @@
 package com.kds.pedidos.service;
 
+import com.kds.pedidos.client.MenuClient;
 import com.kds.pedidos.config.RabbitMQConfig;
 import com.kds.pedidos.dto.*;
 import com.kds.pedidos.exception.RecursoNoEncontradoException;
@@ -14,9 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import java.math.BigDecimal;
+
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 
 @Service
 public class PedidoService {
@@ -28,14 +30,17 @@ public class PedidoService {
     private final PedidoRepository pedidoRepository;
     private final PedidosEventPublisher eventPublisher;
     private final SimpMessagingTemplate messagingTemplate;
+    private final MenuClient menuClient;
 
     public PedidoService(
             PedidoRepository pedidoRepository,
             PedidosEventPublisher eventPublisher,
-            SimpMessagingTemplate messagingTemplate) {
+            SimpMessagingTemplate messagingTemplate,
+            MenuClient menuClient) {
         this.pedidoRepository = pedidoRepository;
         this.eventPublisher = eventPublisher;
         this.messagingTemplate = messagingTemplate;
+        this.menuClient = menuClient;
     }
 
     @Transactional(readOnly = true)
@@ -60,34 +65,31 @@ public class PedidoService {
     public PedidoResponse registrarPedido(CrearPedidoRequest request) {
         LocalDateTime ahora = LocalDateTime.now();
         Pedido pedido = new Pedido();
-        
-        // Simulación de generación correlativa de tickets
-        long timestampSec = System.currentTimeMillis() % 100000;
-        pedido.setNumeroPedido(String.format("ORD-%05d", timestampSec));
+
+        // Ticket único: millis completo evita colisiones del módulo % 100000
+        pedido.setNumeroPedido("ORD-" + System.currentTimeMillis());
         pedido.setFechaCreacion(ahora);
         pedido.setFechaActualizacion(ahora);
 
         for (var itemReq : request.items()) {
+            ProductoMenuResponse producto = menuClient.obtenerProducto(itemReq.productoId());
+
             DetallePedido detalle = new DetallePedido();
-            detalle.setProductoId(itemReq.productoId());
-            
-            // Simulación de datos provenientes de ms-menu (Regla 6.2 y 11)
-            // En un entorno productivo completo se llamaría a ms-menu mediante un cliente REST (Feign)
-            Map<String, Object> mockMenuData = simularConsultaMenu(itemReq.productoId());
-            detalle.setNombreProducto((String) mockMenuData.get("nombre"));
-            detalle.setPrecioUnitario((BigDecimal) mockMenuData.get("precio"));
+            detalle.setProductoId(producto.id());
+            detalle.setNombreProducto(producto.nombre());
+            detalle.setPrecioUnitario(producto.precio());
             detalle.setCantidad(itemReq.cantidad());
             detalle.calcularSubtotal();
-            
+
             pedido.agregarDetalle(detalle);
         }
 
         Pedido guardado = pedidoRepository.save(pedido);
         PedidoResponse respuesta = aPedidoResponse(guardado);
 
-        // Desacoplamiento asíncrono seguro: Emisión solo tras persistencia física en BD
         List<PedidoCreadoEvent.ItemPedidoCreado> itemsEvento = guardado.getDetalles().stream()
-                .map(d -> new PedidoCreadoEvent.ItemPedidoCreado(d.getProductoId(), d.getNombreProducto(), d.getCantidad()))
+                .map(d -> new PedidoCreadoEvent.ItemPedidoCreado(
+                        d.getProductoId(), d.getNombreProducto(), d.getCantidad()))
                 .toList();
 
         PedidoCreadoEvent evento = new PedidoCreadoEvent(
@@ -113,7 +115,6 @@ public class PedidoService {
             pedidoRepository.save(pedido);
             log.info("Pedido sincronizado desde RabbitMQ: id={}, estado={}", pedido.getId(), pedido.getEstado());
 
-            // Notificación reactiva inmediata a cajas/pantallas de despacho front-end
             NotificacionCaja notificacion = new NotificacionCaja(
                     TIPO_ESTADO_ACTUALIZADO,
                     pedido.getId(),
@@ -144,15 +145,5 @@ public class PedidoService {
 
     private PedidoResponse aPedidoResponse(Pedido p) {
         return new PedidoResponse(p.getId(), p.getNumeroPedido(), p.getEstado(), p.getTotal(), p.getFechaCreacion());
-    }
-
-    private Map<String, Object> simularConsultaMenu(Long productoId) {
-        // Mapeo defensivo para simular datos del microservicio ms-menu según guía técnica
-        if (productoId == 1L) {
-            return Map.of("nombre", "Hamburguesa Clasica", "precio", new BigDecimal("4.50"));
-        } else if (productoId == 5L) {
-            return Map.of("nombre", "Papas", "precio", new BigDecimal("2.25"));
-        }
-        return Map.of("nombre", "Producto Genérico KDS", "precio", new BigDecimal("3.00"));
     }
 }

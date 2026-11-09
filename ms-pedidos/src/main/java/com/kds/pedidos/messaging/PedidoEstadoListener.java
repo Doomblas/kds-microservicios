@@ -18,7 +18,7 @@ public class PedidoEstadoListener {
         this.pedidoService = pedidoService;
     }
 
-    @RabbitListener(queues = RabbitMQConfig.PEDIDOS_ESTADO_QUEUE)
+    @RabbitListener(queues = RabbitMQConfig.PEDIDOS_COCINA_QUEUE)
     public void consumirEstadoActualizado(PedidoEstadoActualizadoEvent evento) {
         log.info("Mensaje asíncrono 'pedido.estado.actualizado' recibido: eventoId={}, pedidoId={}, nuevoEstado={}",
                 evento.eventoId(), evento.pedidoId(), evento.estado());

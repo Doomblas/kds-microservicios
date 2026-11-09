@@ -10,7 +10,7 @@ COPY mvnw .
 # Descargar las dependencias en caché para acelerar futuras compilaciones
 RUN ./mvnw -B -q dependency:go-offline
 
-# Copiar tu código fuente (escrito en Java 17) para compilarlo bajo Java 21
+# Compilar el código (Java 17) bajo el JDK 21 de la imagen de build
 COPY src src
 RUN ./mvnw -B -q package -DskipTests
 
