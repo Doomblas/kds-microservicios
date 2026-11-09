@@ -364,11 +364,414 @@ Sin `contentType=application/json`, el listener rechaza el mensaje.
 
 ---
 
-## 9. Orden sugerido para integrar
+## 9. Guía de integración con los microservicios de los compañeros
+
+### 9.0 Matriz de responsabilidades
+
+| Componente | Publica | Consume | Base de datos |
+|---|---|---|---|
+| `ms-menu` | — | — | `menu_db` |
+| `ms-pedidos` | `pedido.creado` | `pedido.estado.actualizado` | `pedidos_db` |
+| `ms-display-cocina` | `pedido.estado.actualizado` | `pedido.creado` | `cocina_db` |
+| API Gateway | — | — | — |
+| Frontend cocina | — | REST + WebSocket | — |
+| Caja | — | Notificación desde Pedidos | `caja_db` |
+
+Regla de oro: **ningún servicio lee ni escribe la base de otro**. La
+comunicación es por eventos o por REST a través del Gateway.
+
+---
+
+### 9.1 Integración con `ms-pedidos` (prioridad alta)
+
+`ms-pedidos` es el único servicio con integración directa obligatoria.
+
+#### A. Lo que Pedidos debe publicar: `pedido.creado`
+
+```text
+exchange:    kds.exchange (topic, durable)
+routing key: pedido.creado
+contentType: application/json
+```
+
+Payload esperado:
+
+```json
+{
+  "eventoId": "uuid",
+  "evento": "pedido.creado",
+  "pedidoId": 1002,
+  "numeroPedido": "ORD-1002",
+  "fechaCreacion": "2026-11-09T14:25:00",
+  "items": [
+    { "productoId": 1, "nombreProducto": "Hamburguesa Clasica", "cantidad": 2 }
+  ]
+}
+```
+
+DTO sugerido en Pedidos:
+
+```java
+public record PedidoCreadoEvent(
+        String eventoId,
+        String evento,
+        Long pedidoId,
+        String numeroPedido,
+        LocalDateTime fechaCreacion,
+        List<Item> items) {
+
+    public record Item(Long productoId, String nombreProducto, Integer cantidad) {}
+}
+```
+
+Publicación con `RabbitTemplate`:
+
+```java
+rabbitTemplate.convertAndSend(
+        "kds.exchange",
+        "pedido.creado",
+        evento);
+```
+
+#### B. Conversor JSON obligatorio en Pedidos
+
+Si Pedidos no configura un conversor JSON, Spring AMQP usa
+`SimpleMessageConverter`, que envía el objeto como Java serializado
+(`application/x-java-serialized-object`). **Cocina rechaza ese mensaje.**
+
+Con Spring Boot 4 / Jackson 3:
+
+```java
+@Bean
+MessageConverter jsonMessageConverter(JsonMapper jsonMapper) {
+    return new JacksonJsonMessageConverter(jsonMapper);
+}
+```
+
+Con Spring Boot 3 / Jackson 2:
+
+```java
+@Bean
+MessageConverter jsonMessageConverter(ObjectMapper objectMapper) {
+    return new Jackson2JsonMessageConverter(objectMapper);
+}
+```
+
+Spring Boot toma ese bean para `RabbitTemplate` y para el listener container.
+Si se publica con un cliente distinto, hay que fijar explícitamente:
+
+```java
+MessageProperties props = new MessageProperties();
+props.setContentType("application/json");
+props.setContentEncoding("UTF-8");
+```
+
+No es necesario agregar el header `__TypeId__` para que Cocina lo reciba:
+el listener usa el tipo concreto del método. Cocina sí lo agrega al publicar
+sus eventos, pero un consumidor con tipo inferido puede ignorarlo.
+
+#### C. Lo que Pedidos debe consumir: `pedido.estado.actualizado`
+
+Pedidos debe declarar **su propia cola**. No debe consumir de
+`cocina.pedidos.queue`, porque esa cola pertenece a Cocina.
+
+```java
+@Configuration
+class RabbitConfig {
+
+    @Bean
+    TopicExchange kdsExchange() {
+        return ExchangeBuilder.topicExchange("kds.exchange").durable(true).build();
+    }
+
+    @Bean
+    Queue pedidosCocinaQueue() {
+        return QueueBuilder.durable("pedidos.cocina.queue").build();
+    }
+
+    @Bean
+    Binding pedidosCocinaBinding(Queue pedidosCocinaQueue, TopicExchange kdsExchange) {
+        return BindingBuilder.bind(pedidosCocinaQueue)
+                .to(kdsExchange)
+                .with("pedido.estado.actualizado");
+    }
+}
+```
+
+Listener:
+
+```java
+@RabbitListener(queues = "pedidos.cocina.queue")
+public void onEstadoActualizado(PedidoEstadoActualizadoEvent evento) {
+    // 1. Buscar el pedido por evento.pedidoId()
+    // 2. Actualizar su estado
+    // 3. Notificar a caja si corresponde
+}
+```
+
+DTO sugerido en Pedidos:
+
+```java
+public record PedidoEstadoActualizadoEvent(
+        String eventoId,
+        String evento,
+        Long pedidoId,
+        String numeroPedido,
+        EstadoCocina estado,
+        LocalDateTime fechaActualizacion) {
+}
+```
+
+Headers reales que publica Cocina:
+
+```text
+contentType=application/json
+contentEncoding=UTF-8
+__TypeId__=com.kds.cocina.dto.PedidoEstadoActualizadoEvent
+```
+
+Si el conversor de Pedidos intenta usar el `__TypeId__` y la clase no existe
+en su classpath, debe usar tipo inferido:
+
+```java
+converter.getJavaTypeMapper().setTypePrecedence(TypePrecedence.INFERRED);
+```
+
+O definir el DTO en su propio paquete y recibirlo tipado en el método. En ese
+caso, el header se ignora y se usa el tipo del parámetro.
+
+#### D. Reglas que Pedidos debe respetar
+
+- `eventoId` debe ser único por emisión; sirve para idempotencia.
+- `pedidoId` es el identificador de negocio y es único en Cocina.
+- `items` no puede venir vacío.
+- `cantidad` debe ser mayor que cero.
+- `productoId` debe ser estable; no se reutilizan ids de productos eliminados.
+- Si Pedidos reenvía el mismo `pedido.creado`, Cocina no duplica la orden.
+- Los estados que recibirá son: `PREPARANDO` y `LISTO`. `PENDIENTE` nunca se
+  publica porque es el estado inicial.
+
+#### E. Verificación conjunta Pedidos ↔ Cocina
+
+1. Levantar RabbitMQ, `ms-pedidos` y `ms-display-cocina`.
+2. Crear un pedido en Pedidos.
+3. Verificar en Cocina: `GET /ordenes` debe mostrar la orden en `PENDIENTE`.
+4. Verificar el WebSocket: debe llegar `PEDIDO_CREADO`.
+5. En Cocina, hacer `PATCH` a `PREPARANDO`.
+6. Verificar en Pedidos que recibió `pedido.estado.actualizado`.
+7. Repetir con `LISTO`.
+8. Reenviar el mismo `pedido.creado` y confirmar que no se duplica.
+
+---
+
+### 9.2 Integración con `ms-menu`
+
+No hay integración en tiempo de ejecución. Cocina **no llama** a `ms-menu` ni
+lee `menu_db`.
+
+- `productoId` es una referencia lógica.
+- `nombreProducto` viaja como copia (snapshot) dentro de `pedido.creado`.
+- Si el producto cambia de nombre después, las órdenes existentes conservan el
+  nombre con el que se crearon.
+- Es responsabilidad de `ms-pedidos` obtener el nombre desde `ms-menu` al crear
+  el pedido.
+- No se debe agregar una foreign key entre `cocina_db` y `menu_db`.
+
+Único acuerdo necesario: **los `productoId` deben ser estables y no
+reutilizarse**.
+
+---
+
+### 9.3 Integración con el API Gateway
+
+Rutas requeridas:
+
+| Ruta pública | Destino | Tipo |
+|---|---|---|
+| `/ordenes/**` | `ms-display-cocina:8083` | HTTP |
+| `/ws` o `/ws/**` | `ms-display-cocina:8083` | WebSocket |
+| `/swagger-ui/**`, `/v3/api-docs` | Opcional | HTTP |
+
+Ejemplo con Spring Cloud Gateway:
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: display-cocina
+          uri: http://ms-display-cocina:8083
+          predicates:
+            - Path=/ordenes/**
+        - id: display-cocina-ws
+          uri: ws://ms-display-cocina:8083
+          predicates:
+            - Path=/ws/**
+```
+
+Si se usa descubrimiento de servicios, el esquema suele ser
+`lb:ws://ms-display-cocina`. Verificar la versión del Gateway del equipo.
+
+Si el Gateway es Nginx:
+
+```nginx
+location /ws {
+    proxy_pass http://ms-display-cocina:8083;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+
+Consideraciones:
+
+- El WebSocket debe conservar los headers `Upgrade` y `Connection`.
+- Definir timeouts mayores que el intervalo de ping del cliente STOMP.
+- El Gateway puede centralizar CORS; si no, hay que configurarlo en Cocina.
+- Probar tanto `GET /ordenes` como la conexión `ws://gateway/ws`.
+
+Verificación:
+
+```bash
+curl http://localhost:8080/ordenes
+# y desde el frontend o Postman:
+# ws://localhost:8080/ws  -> SUBSCRIBE /topic/cocina
+```
+
+---
+
+### 9.4 Integración con el frontend de cocina
+
+El frontend debe usar **STOMP nativo**, no SockJS.
+
+```js
+import { Client } from '@stomp/stompjs';
+
+const client = new Client({
+  brokerURL: 'ws://localhost:8083/ws',
+  reconnectDelay: 5000,
+});
+
+client.onConnect = () => {
+  client.subscribe('/topic/cocina', (frame) => {
+    const evento = JSON.parse(frame.body);
+    if (evento.tipo === 'PEDIDO_CREADO') {
+      // agregar la orden a la pantalla
+    }
+  });
+};
+
+client.activate();
+```
+
+REST:
+
+```js
+const res = await fetch('http://localhost:8083/ordenes');
+const ordenes = await res.json();
+
+await fetch(`http://localhost:8083/ordenes/${id}/estado`, {
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ estado: 'PREPARANDO' }),
+});
+```
+
+Notas:
+
+- Hoy **no hay CORS REST** en Cocina. Opciones:
+  - Proxy de Vite: `/ordenes` y `/ws` hacia `http://localhost:8083`.
+  - O agregar CORS en el backend antes de consumir desde otro origen.
+- El WebSocket ya permite orígenes configurables con `WS_ALLOWED_ORIGINS`.
+- `PEDIDO_CREADO` es el único mensaje WebSocket de v1.
+- Ante `409`, mostrar que la orden ya cambió de estado y refrescar la lista.
+- Ante `404`, quitar la orden de la vista.
+
+---
+
+### 9.5 Integración con Caja
+
+En el diseño v1, Cocina **no publica hacia Caja**. Cocina publica
+`pedido.estado.actualizado` y es `ms-pedidos` quien actualiza su base y
+notifica a Caja si el alcance lo requiere.
+
+Si Caja necesitara consumir el evento directamente:
+
+- Debe declarar su propia cola durable.
+- Debe enlazarla a `kds.exchange` con la routing key
+  `pedido.estado.actualizado`.
+- No debe consumir de `cocina.pedidos.queue` ni de `pedidos.cocina.queue`.
+- Debe ser idempotente por `eventoId`.
+
+Coordinar con Pedidos para no duplicar notificaciones.
+
+---
+
+### 9.6 Integración en `docker-compose.yml`
+
+Bloque de referencia para el compose raíz:
+
+```yaml
+services:
+  cocina-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: cocina_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cocina_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ms-display-cocina:
+    build: ./ms-display-cocina
+    environment:
+      DB_URL: jdbc:postgresql://cocina-db:5432/cocina_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PASSWORD: guest
+      WS_ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
+    ports:
+      - "8083:8083"
+    depends_on:
+      cocina-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+```
+
+Notas:
+
+- `5433:5432` evita choque si ya hay un PostgreSQL local en `5432`.
+- El `DB_URL` usa el nombre del servicio (`cocina-db`), no `localhost`.
+- Si el compose ya tiene un RabbitMQ compartido, no crear otro: reutilizarlo y
+  ajustar `RABBITMQ_HOST`.
+- El Gateway y `ms-pedidos` deben apuntar a `ms-display-cocina:8083` dentro de
+  la red de Docker.
+
+---
+
+### 9.7 Orden sugerido para integrar
 
 1. **Sincronizar ramas.** Partir de `develop` actualizado.
 2. **ms-pedidos.** Publicar `pedido.creado` con `contentType=application/json`
-   y consumir `pedido.estado.actualizado`.
+   y consumir `pedido.estado.actualizado` en su propia cola.
 3. **Gateway.** Enrutar REST y WebSocket.
 4. **docker-compose.** Agregar `ms-display-cocina`, `cocina-db`, RabbitMQ,
    healthchecks y `depends_on`.
@@ -379,7 +782,22 @@ Sin `contentType=application/json`, el listener rechaza el mensaje.
 
 ---
 
-## 10. Puntos de atención
+### 9.8 Criterios de aceptación de la integración
+
+- [ ] Un pedido creado en `ms-pedidos` aparece en Cocina como `PENDIENTE`.
+- [ ] El frontend recibe `PEDIDO_CREADO` por `/topic/cocina`.
+- [ ] `PATCH` a `PREPARANDO` actualiza la base y publica el evento.
+- [ ] `PATCH` a `LISTO` registra `fechaFinalizacion` y publica el evento.
+- [ ] `ms-pedidos` recibe y aplica `pedido.estado.actualizado`.
+- [ ] Un evento duplicado no crea otra orden ni otra notificación.
+- [ ] Una transición inválida devuelve `409` y no altera la base.
+- [ ] Las rutas REST y WebSocket funcionan a través del Gateway.
+- [ ] Todo el conjunto levanta con `docker compose up`.
+- [ ] No se accede a bases de datos de otros servicios.
+
+---
+
+## 11. Puntos de atención
 
 - **Content-Type:** los eventos deben viajar como JSON con
   `contentType=application/json`. El listener no acepta `text/plain`.
@@ -398,7 +816,7 @@ Sin `contentType=application/json`, el listener rechaza el mensaje.
 
 ---
 
-## 11. Contacto
+## 12. Contacto
 
 Responsable de `ms-display-cocina`: Marco.
 Cualquier cambio en los contratos de eventos debe coordinarse con Pedidos y
