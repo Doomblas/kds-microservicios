@@ -1,0 +1,97 @@
+services:
+  menu-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: menu_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-root}
+    ports:
+      - "5434:5432"
+    volumes:
+      - menu-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d menu_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  cocina-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: cocina_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-root}
+    ports:
+      - "5435:5432"
+    volumes:
+      - cocina-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cocina_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-cocina_app}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-root}
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ms-menu:
+    build:
+      context: ./ms-menu
+    environment:
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://menu-db:5432/menu_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-root}
+    ports:
+      - "8081:8080"
+    depends_on:
+      menu-db:
+        condition: service_healthy
+
+  ms-display-cocina:
+    build:
+      context: ./ms-display-cocina
+    environment:
+      SERVER_PORT: 8083
+      DB_URL: jdbc:postgresql://cocina-db:5432/cocina_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-cocina_app}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-root}
+      RABBITMQ_VHOST: /
+      WS_ALLOWED_ORIGINS: "*"
+    ports:
+      - "8084:8083"
+    depends_on:
+      cocina-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  frontend-cocina:
+    build:
+      context: ./frontend-cocina
+    ports:
+      - "5175:80"
+    depends_on:
+      - ms-display-cocina
+
+volumes:
+  menu-db-data:
+  cocina-db-data:
+  rabbitmq-data:

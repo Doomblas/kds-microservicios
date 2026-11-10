@@ -18,6 +18,18 @@ npm run dev
 
 Abrir `http://localhost:5173`. Vite hace proxy de `/ordenes` y `/ws` al backend para evitar configurar CORS durante el desarrollo.
 
+## Ejecutar en Docker Compose
+
+Desde la raíz del repositorio:
+
+```bash
+cp .env.example .env
+docker compose -f compose.integration.yaml up --build -d
+```
+
+Abrir `http://localhost:5175`. Nginx sirve el frontend y proxifica REST y
+WebSocket a `ms-display-cocina` dentro de la red Docker.
+
 Si el backend está en otro host:
 
 ```bash

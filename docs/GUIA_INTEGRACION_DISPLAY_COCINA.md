@@ -343,24 +343,27 @@ Sin `contentType=application/json`, el listener rechaza el mensaje.
 - WebSocket STOMP en `/ws` y `/topic/cocina`.
 - Idempotencia, validaciones, transiciones y manejo de errores.
 - Swagger/OpenAPI y Actuator.
-- Dockerfile multi-stage.
+- Dockerfiles multi-stage para `ms-menu`, `ms-display-cocina` y frontend cocina.
+- Compose funcional para Menu + Cocina + PostgreSQLs + RabbitMQ + frontend.
 - 22 tests.
 - Validación de punta a punta con PostgreSQL y RabbitMQ reales:
   creación, duplicados, transiciones, eventos, WebSocket y errores.
+- Build de las tres imágenes y prueba REST/WebSocket mediante el proxy Nginx.
 
 ### Pendiente para la integración completa
 
 | Tarea | Depende de | Notas |
 |---|---|---|
-| Implementar `ms-pedidos` y publicar `pedido.creado` | Equipo de Pedidos | Aún no existe en `develop` |
+| Implementar/integrar `ms-pedidos` y publicar `pedido.creado` | Equipo de Pedidos | No está en la copia de trabajo que acompaña este Compose |
 | Consumir `pedido.estado.actualizado` en Pedidos | Equipo de Pedidos | Actualizar estado y notificar a caja |
 | Agregar rutas al API Gateway | Equipo de Gateway | `/ordenes/**` y `/ws` hacia `:8083` |
-| Agregar el servicio a `docker-compose.yml` raíz | Equipo | Incluir `cocina-db`, RabbitMQ y variables |
-| Desplegar e integrar el frontend de cocina | Frontend/equipo | Implementación inicial en `frontend-cocina/`; validar vía Gateway/Compose |
-| CORS/proxy para producción | Equipo de Gateway/Frontend | Vite proxifica REST y WebSocket durante desarrollo |
+| Integrar `ms-pedidos` al Compose | Equipo de Pedidos | Agregar su DB, Dockerfile, healthcheck y variables |
+| Desplegar frontend Cocina detrás del Gateway | Equipo de Gateway/Frontend | Ya tiene Nginx proxy para pruebas locales; falta validar Gateway |
+| CORS/proxy para producción | Equipo de Gateway/Frontend | Configurar orígenes y URL pública según despliegue |
 | Colección Postman | Equipo | `GET`, `GET/{id}`, `PATCH` |
 | Medir propagación | Equipo | Pedido creado → visible; estado → Pedidos |
-| Validar la imagen Docker | Equipo | No fue posible en el entorno de validación |
+| Validar imágenes y stack Compose | Equipo | Build y arranque de Menu+Cocina+frontend ya comprobados |
+| Integrar `ms-pedidos` al Compose compartido | Equipo de Pedidos | Falta su código/Dockerfile en esta copia; seguir el contrato y pasos de §9.1 |
 | Considerar patrón outbox | Futuro | Evitar pérdida de eventos si RabbitMQ cae |
 
 ---
@@ -708,63 +711,127 @@ Coordinar con Pedidos para no duplicar notificaciones.
 
 ---
 
-### 9.6 Integración en `docker-compose.yml`
+### 9.6 Docker Compose, interfaz para exposición y pruebas de integración
 
-Bloque de referencia para el compose raíz:
+Ya existe `compose.integration.yaml`, que levanta lo disponible en esta rama:
 
-```yaml
-services:
-  cocina-db:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: cocina_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5433:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d cocina_db"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+- `ms-menu` + su `menu-db`.
+- `ms-display-cocina` + su `cocina-db`.
+- RabbitMQ con Management.
+- `frontend-cocina`, servida por Nginx y con proxy HTTP/WebSocket al servicio
+  de Cocina.
 
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+Las bases y RabbitMQ son contenedores separados y tienen volúmenes persistentes.
+Dentro de la red Compose, las aplicaciones usan DNS de servicio (`menu-db`,
+`cocina-db`, `rabbitmq`), nunca `localhost`. Las contraseñas `root` son solo
+para desarrollo/exposición local.
 
-  ms-display-cocina:
-    build: ./ms-display-cocina
-    environment:
-      DB_URL: jdbc:postgresql://cocina-db:5432/cocina_db
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PASSWORD: guest
-      WS_ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
-    ports:
-      - "8083:8083"
-    depends_on:
-      cocina-db:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+Arranque reproducible desde la raíz:
+
+```bash
+cp .env.example .env
+docker compose -f compose.integration.yaml config
+docker compose -f compose.integration.yaml up --build -d
+docker compose -f compose.integration.yaml ps
 ```
 
-Notas:
+URLs en esta configuración (se eligieron puertos alternativos para no chocar
+con servicios locales ya instalados):
 
-- `5433:5432` evita choque si ya hay un PostgreSQL local en `5432`.
-- El `DB_URL` usa el nombre del servicio (`cocina-db`), no `localhost`.
-- Si el compose ya tiene un RabbitMQ compartido, no crear otro: reutilizarlo y
-  ajustar `RABBITMQ_HOST`.
-- El Gateway y `ms-pedidos` deben apuntar a `ms-display-cocina:8083` dentro de
-  la red de Docker.
+| Componente | URL |
+|---|---|
+| Frontend Cocina | `http://localhost:5175` |
+| API display-cocina (directa) | `http://localhost:8084/ordenes` |
+| Swagger display-cocina | `http://localhost:8084/swagger-ui.html` |
+| API `ms-menu` | `http://localhost:8081` |
+| RabbitMQ Management | `http://localhost:15673` |
+| PostgreSQL menu (host) | `localhost:5434`, DB `menu_db` |
+| PostgreSQL cocina (host) | `localhost:5435`, DB `cocina_db` |
+
+Para la consola RabbitMQ use el usuario/contraseña local de `.env`. Las
+aplicaciones se conectan entre sí dentro de Compose por `rabbitmq:5672`.
+
+Verificación operativa (no reemplaza la demostración visual):
+
+```bash
+docker compose -f compose.integration.yaml ps
+docker compose -f compose.integration.yaml logs --tail=100 ms-menu ms-display-cocina rabbitmq
+curl -i http://localhost:8081/categorias
+curl -i http://localhost:8081/productos
+curl -i http://localhost:8084/ordenes
+```
+
+Validación ejecutada en desarrollo: build de las tres imágenes correcto; todos
+los servicios Compose quedaron `Up` (bases y RabbitMQ `healthy`); GET de Menu,
+GET Cocina directo y GET Cocina a través de Nginx devolvieron `200`; una
+notificación `PEDIDO_CREADO` atravesó RabbitMQ → listener → WebSocket proxificado
+por Nginx; PATCH a `PREPARANDO` por el proxy devolvió `200` y registró
+`fechaInicio`. Tests: Cocina 22/22; Menu 1/1 al apuntarlo al `menu-db` de Compose.
+
+Ese smoke test técnico publicó un evento de validación directamente al broker.
+Para la exposición, el flujo debe originarse en la interfaz de Pedidos, como se
+describe abajo; no se deben mostrar publicaciones manuales como interacción.
+
+Parar conservando los datos:
+
+```bash
+docker compose -f compose.integration.yaml down
+```
+
+`docker compose down -v` borra las bases y colas persistidas; **no usarlo** si
+se quieren conservar los datos de prueba.
+
+#### Incorporación obligatoria de `ms-pedidos`
+
+`ms-pedidos` no está en esta copia del repositorio; por eso el Compose actual
+no finge ejecutar el flujo completo. Cuando su dueño integre el servicio debe:
+
+1. Añadir su Dockerfile y servicio al `compose.integration.yaml`.
+2. Añadir una base aislada `pedidos-db` y variables de conexión propias.
+3. Añadir dependencia `rabbitmq` usando la red de Compose, usuario compartido
+   y `contentType=application/json`.
+4. Declarar su cola propia para `pedido.estado.actualizado`.
+5. Publicar `pedido.creado` tras crear el pedido correctamente.
+6. Publicar el puerto de su API y documentar su URL.
+7. Agregar su frontend (por ejemplo `frontend-pedidos/`) para crear pedidos
+   desde una pantalla, sin tener que publicar eventos manualmente.
+
+No usar la cola `cocina.pedidos.queue` como cola de Pedidos. Las colas son
+independientes y se enlazan al exchange compartido por sus routing keys.
+
+#### Prueba integrada para la exposición (flujo de usuario)
+
+La exposición debe demostrar acciones desde las interfaces, no depender de
+comandos de consola para crear/avanzar el pedido:
+
+1. Abrir el frontend de Menú y crear/ver un producto disponible.
+2. Abrir el frontend de Pedidos y crear una orden con ese producto.
+3. Observar que la orden aparece en el frontend de Cocina como `PENDIENTE`.
+4. Desde Cocina, pulsar **Iniciar preparación** y comprobar el cambio a
+   `PREPARANDO`.
+5. Comprobar visualmente en Pedidos que recibió el estado actualizado.
+6. Desde Cocina, pulsar **Marcar como listo** y confirmar `LISTO` en Pedidos.
+7. Repetir con otro pedido para comprobar que el tablero sigue actualizándose.
+
+RabbitMQ Management, Swagger, logs y SQL quedan como herramientas de diagnóstico
+para el equipo, no como sustituto de las pantallas durante la presentación.
+
+#### Frontends asignados para la presentación
+
+Para cumplir el objetivo de una demostración de extremo a extremo, cada equipo
+de microservicio debe entregar la interfaz de usuario correspondiente a su
+responsabilidad, integrada al menos con su API y, cuando corresponda, al
+Gateway. En este trabajo:
+
+| Responsable | Interfaz esperada | Acción visible |
+|---|---|---|
+| Menú | Frontend de Menú (lo entrega su responsable) | Consultar/administrar categorías y productos |
+| Pedidos | Frontend de Pedidos (lo entrega su responsable) | Crear pedido con productos del menú y ver estado |
+| Display Cocina | `frontend-cocina/` (incluido aquí) | Ver comandas y avanzar su preparación |
+
+No es requisito técnico que cada UI sea un despliegue web separado: pueden
+integrarse en un portal común si cada módulo conserva su navegación y permite
+mostrar su flujo sin usar Postman o comandos como interacción principal.
 
 ---
 
@@ -774,13 +841,16 @@ Notas:
 2. **ms-pedidos.** Publicar `pedido.creado` con `contentType=application/json`
    y consumir `pedido.estado.actualizado` en su propia cola.
 3. **Gateway.** Enrutar REST y WebSocket.
-4. **docker-compose.** Agregar `ms-display-cocina`, `cocina-db`, RabbitMQ,
-   `frontend-cocina`, healthchecks y `depends_on`.
-5. **Frontend.** Levantar `frontend-cocina/`, configurar la URL del Gateway y
-   validar REST + STOMP en el entorno integrado.
-6. **Pruebas integradas.** Varios pedidos, duplicados, transiciones y caída de
-   RabbitMQ.
-7. **Métricas.** Tiempo de propagación y porcentaje de eventos procesados.
+4. **Compose.** Levantar `compose.integration.yaml` y comprobar Menu, Cocina,
+   bases, RabbitMQ y frontend.
+5. **Pedidos.** Incorporar `ms-pedidos`, su base y su frontend al Compose; validar
+   publicación/consumo real de los eventos.
+6. **Gateway.** Enrutar APIs y WebSockets; cambiar los frontends para usar el
+   Gateway en el entorno integrado.
+7. **Ensayo visual.** Ejecutar el recorrido Menú → Pedido → Cocina → estado
+   actualizado en Pedidos desde las interfaces.
+8. **Pruebas técnicas complementarias.** Duplicados, errores, reinicios y caída
+   temporal de RabbitMQ; registrar métricas de propagación.
 
 ---
 
@@ -796,6 +866,8 @@ Notas:
 - [ ] Las rutas REST y WebSocket funcionan a través del Gateway.
 - [ ] Todo el conjunto levanta con `docker compose up`.
 - [ ] No se accede a bases de datos de otros servicios.
+- [ ] Durante la exposición, Menu, Pedidos y Cocina se operan desde sus UIs; no
+      se usan comandos o Postman como sustituto de la experiencia visual.
 
 ---
 
