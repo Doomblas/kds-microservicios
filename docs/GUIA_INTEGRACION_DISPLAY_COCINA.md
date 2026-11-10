@@ -864,7 +864,8 @@ mostrar su flujo sin usar Postman o comandos como interacción principal.
 - [ ] Un evento duplicado no crea otra orden ni otra notificación.
 - [ ] Una transición inválida devuelve `409` y no altera la base.
 - [ ] Las rutas REST y WebSocket funcionan a través del Gateway.
-- [ ] Todo el conjunto levanta con `docker compose up`.
+- [ ] Todo el conjunto completo (incluido `ms-pedidos`) levanta con
+      `docker compose -f compose.integration.yaml up --build -d`.
 - [ ] No se accede a bases de datos de otros servicios.
 - [ ] Durante la exposición, Menu, Pedidos y Cocina se operan desde sus UIs; no
       se usan comandos o Postman como sustituto de la experiencia visual.
