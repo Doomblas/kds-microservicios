@@ -117,9 +117,10 @@ Documentación interactiva:
 - OpenAPI: `http://localhost:8083/v3/api-docs`
 - Health: `http://localhost:8083/actuator/health`
 
-> **Pendiente:** todavía no hay configuración CORS para REST. Si el frontend
-> corre en otro origen (por ejemplo Vite en `localhost:5173`), debe usarse un
-> proxy del bundler o agregar CORS en el backend antes de consumirlo directo.
+> El frontend incluido en `frontend-cocina/` usa el proxy de Vite en desarrollo,
+> por lo que no requiere habilitar CORS REST para esa configuración. Si se
+> despliega en otro origen, configurar CORS en Gateway/backend o mantener un
+> proxy reverso.
 
 ### 3.2 RabbitMQ
 
@@ -355,8 +356,8 @@ Sin `contentType=application/json`, el listener rechaza el mensaje.
 | Consumir `pedido.estado.actualizado` en Pedidos | Equipo de Pedidos | Actualizar estado y notificar a caja |
 | Agregar rutas al API Gateway | Equipo de Gateway | `/ordenes/**` y `/ws` hacia `:8083` |
 | Agregar el servicio a `docker-compose.yml` raíz | Equipo | Incluir `cocina-db`, RabbitMQ y variables |
-| Agregar CORS REST o proxy en el frontend | Frontend | Necesario si se consume desde otro origen |
-| Implementar pantalla de cocina | Frontend | Consumir REST + STOMP |
+| Desplegar e integrar el frontend de cocina | Frontend/equipo | Implementación inicial en `frontend-cocina/`; validar vía Gateway/Compose |
+| CORS/proxy para producción | Equipo de Gateway/Frontend | Vite proxifica REST y WebSocket durante desarrollo |
 | Colección Postman | Equipo | `GET`, `GET/{id}`, `PATCH` |
 | Medir propagación | Equipo | Pedido creado → visible; estado → Pedidos |
 | Validar la imagen Docker | Equipo | No fue posible en el entorno de validación |
@@ -374,7 +375,7 @@ Sin `contentType=application/json`, el listener rechaza el mensaje.
 | `ms-pedidos` | `pedido.creado` | `pedido.estado.actualizado` | `pedidos_db` |
 | `ms-display-cocina` | `pedido.estado.actualizado` | `pedido.creado` | `cocina_db` |
 | API Gateway | — | — | — |
-| Frontend cocina | — | REST + WebSocket | — |
+| Frontend cocina (`frontend-cocina/`) | — | REST + WebSocket | — |
 | Caja | — | Notificación desde Pedidos | `caja_db` |
 
 Regla de oro: **ningún servicio lee ni escribe la base de otro**. La
@@ -774,8 +775,9 @@ Notas:
    y consumir `pedido.estado.actualizado` en su propia cola.
 3. **Gateway.** Enrutar REST y WebSocket.
 4. **docker-compose.** Agregar `ms-display-cocina`, `cocina-db`, RabbitMQ,
-   healthchecks y `depends_on`.
-5. **Frontend.** Conectar la pantalla de cocina al REST y al STOMP.
+   `frontend-cocina`, healthchecks y `depends_on`.
+5. **Frontend.** Levantar `frontend-cocina/`, configurar la URL del Gateway y
+   validar REST + STOMP en el entorno integrado.
 6. **Pruebas integradas.** Varios pedidos, duplicados, transiciones y caída de
    RabbitMQ.
 7. **Métricas.** Tiempo de propagación y porcentaje de eventos procesados.
@@ -801,6 +803,8 @@ Notas:
 
 - **Content-Type:** los eventos deben viajar como JSON con
   `contentType=application/json`. El listener no acepta `text/plain`.
+- **Frontend existente:** `frontend-cocina/` contiene una primera pantalla
+  funcional con tablero, búsqueda, avance de estados, STOMP y reconexión.
 - **Paquete confiable:** el conversor solo deserializa DTO de
   `com.kds.cocina.dto`.
 - **WebSocket sin SockJS:** el cliente debe usar STOMP nativo sobre
