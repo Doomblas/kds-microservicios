@@ -343,27 +343,31 @@ Sin `contentType=application/json`, el listener rechaza el mensaje.
 - WebSocket STOMP en `/ws` y `/topic/cocina`.
 - Idempotencia, validaciones, transiciones y manejo de errores.
 - Swagger/OpenAPI y Actuator.
-- Dockerfiles multi-stage para `ms-menu`, `ms-display-cocina` y frontend cocina.
-- Compose funcional para Menu + Cocina + PostgreSQLs + RabbitMQ + frontend.
+- Dockerfile multi-stage de `ms-display-cocina` y frontend Cocina (responsabilidad
+  de este equipo); Menu/Pedidos son imágenes de apoyo para integración.
+- Compose de integración con Menu, Pedidos, Cocina, bases PostgreSQL separadas,
+  RabbitMQ compartido y frontend Cocina.
 - 22 tests.
 - Validación de punta a punta con PostgreSQL y RabbitMQ reales:
   creación, duplicados, transiciones, eventos, WebSocket y errores.
-- Build de las tres imágenes y prueba REST/WebSocket mediante el proxy Nginx.
+- Build de las cuatro imágenes y prueba REST/WebSocket mediante el proxy Nginx.
+- Tests de `ms-pedidos`: 2/2, incluido el test de contrato RabbitMQ con Cocina.
+- Flujo real en Compose: Menu crea producto → Pedidos crea pedido → Cocina lo
+  recibe → Cocina cambia a `PREPARANDO` → Pedidos sincroniza el estado.
 
 ### Pendiente para la integración completa
 
 | Tarea | Depende de | Notas |
 |---|---|---|
-| Implementar/integrar `ms-pedidos` y publicar `pedido.creado` | Equipo de Pedidos | No está en la copia de trabajo que acompaña este Compose |
-| Consumir `pedido.estado.actualizado` en Pedidos | Equipo de Pedidos | Actualizar estado y notificar a caja |
+| Mantener `ms-pedidos`, publicar `pedido.creado` y consumir `pedido.estado.actualizado` | Equipo de Pedidos | Servicio en `develop`; contrato e integración técnica probados, mantenimiento a cargo de su responsable |
 | Agregar rutas al API Gateway | Equipo de Gateway | `/ordenes/**` y `/ws` hacia `:8083` |
-| Integrar `ms-pedidos` al Compose | Equipo de Pedidos | Agregar su DB, Dockerfile, healthcheck y variables |
+| Integrar `ms-pedidos` al Compose | Equipo de integración | Ya configurado en `compose.integration.yaml`; no implica asumir su desarrollo |
 | Desplegar frontend Cocina detrás del Gateway | Equipo de Gateway/Frontend | Ya tiene Nginx proxy para pruebas locales; falta validar Gateway |
 | CORS/proxy para producción | Equipo de Gateway/Frontend | Configurar orígenes y URL pública según despliegue |
 | Colección Postman | Equipo | `GET`, `GET/{id}`, `PATCH` |
 | Medir propagación | Equipo | Pedido creado → visible; estado → Pedidos |
-| Validar imágenes y stack Compose | Equipo | Build y arranque de Menu+Cocina+frontend ya comprobados |
-| Integrar `ms-pedidos` al Compose compartido | Equipo de Pedidos | Falta su código/Dockerfile en esta copia; seguir el contrato y pasos de §9.1 |
+| Validar imágenes y stack Compose | Equipo | Stack y flujo técnico Menu→Pedidos→Cocina comprobados |
+| Entregar frontend de Pedidos | Equipo de Pedidos | Necesario para la demostración visual; no está incluido aquí |
 | Considerar patrón outbox | Futuro | Evitar pérdida de eventos si RabbitMQ cae |
 
 ---
@@ -713,9 +717,11 @@ Coordinar con Pedidos para no duplicar notificaciones.
 
 ### 9.6 Docker Compose, interfaz para exposición y pruebas de integración
 
-Ya existe `compose.integration.yaml`, que levanta lo disponible en esta rama:
+Ya existe `compose.integration.yaml`, que permite levantar el entorno compartido
+para pruebas de integración:
 
 - `ms-menu` + su `menu-db`.
+- `ms-pedidos` + su `pedidos-db`.
 - `ms-display-cocina` + su `cocina-db`.
 - RabbitMQ con Management.
 - `frontend-cocina`, servida por Nginx y con proxy HTTP/WebSocket al servicio
@@ -747,6 +753,8 @@ con servicios locales ya instalados):
 | RabbitMQ Management | `http://localhost:15673` |
 | PostgreSQL menu (host) | `localhost:5434`, DB `menu_db` |
 | PostgreSQL cocina (host) | `localhost:5435`, DB `cocina_db` |
+| API `ms-pedidos` | `http://localhost:8085/pedidos` |
+| PostgreSQL Pedidos (host) | `localhost:5436`, DB `pedidos_db` |
 
 Para la consola RabbitMQ use el usuario/contraseña local de `.env`. Las
 aplicaciones se conectan entre sí dentro de Compose por `rabbitmq:5672`.
@@ -759,14 +767,20 @@ docker compose -f compose.integration.yaml logs --tail=100 ms-menu ms-display-co
 curl -i http://localhost:8081/categorias
 curl -i http://localhost:8081/productos
 curl -i http://localhost:8084/ordenes
+curl -i http://localhost:8085/pedidos
 ```
 
-Validación ejecutada en desarrollo: build de las tres imágenes correcto; todos
+Validación ejecutada en desarrollo: build de las cuatro imágenes correcto; todos
 los servicios Compose quedaron `Up` (bases y RabbitMQ `healthy`); GET de Menu,
 GET Cocina directo y GET Cocina a través de Nginx devolvieron `200`; una
 notificación `PEDIDO_CREADO` atravesó RabbitMQ → listener → WebSocket proxificado
 por Nginx; PATCH a `PREPARANDO` por el proxy devolvió `200` y registró
-`fechaInicio`. Tests: Cocina 22/22; Menu 1/1 al apuntarlo al `menu-db` de Compose.
+`fechaInicio`. Tests: Cocina 22/22; Menu 1/1 con `menu-db`; Pedidos 2/2.
+
+También se validó el flujo real por API: producto creado en Menu, `POST
+/pedidos` devuelve `201`, Cocina lo recibe como `PENDIENTE`, el `PATCH` a
+`PREPARANDO` publica el evento y Pedidos refleja el nuevo estado. El equipo de
+Pedidos conserva la responsabilidad de su código y sus pruebas.
 
 Ese smoke test técnico publicó un evento de validación directamente al broker.
 Para la exposición, el flujo debe originarse en la interfaz de Pedidos, como se
@@ -781,20 +795,19 @@ docker compose -f compose.integration.yaml down
 `docker compose down -v` borra las bases y colas persistidas; **no usarlo** si
 se quieren conservar los datos de prueba.
 
-#### Incorporación obligatoria de `ms-pedidos`
+#### Integración con `ms-pedidos` y límites de responsabilidad
 
-`ms-pedidos` no está en esta copia del repositorio; por eso el Compose actual
-no finge ejecutar el flujo completo. Cuando su dueño integre el servicio debe:
+`ms-pedidos` ya está en `develop` y está agregado al Compose como consumidor
+del servicio compartido. Su implementación, pruebas y frontend siguen siendo
+responsabilidad del equipo de Pedidos. El servicio está construido desde
+`ms-pedidos/dockerfile` (nombre en minúsculas), tiene una DB aislada, consulta
+productos por `http://ms-menu:8080` y comparte RabbitMQ por la red interna.
 
-1. Añadir su Dockerfile y servicio al `compose.integration.yaml`.
-2. Añadir una base aislada `pedidos-db` y variables de conexión propias.
-3. Añadir dependencia `rabbitmq` usando la red de Compose, usuario compartido
-   y `contentType=application/json`.
-4. Declarar su cola propia para `pedido.estado.actualizado`.
-5. Publicar `pedido.creado` tras crear el pedido correctamente.
-6. Publicar el puerto de su API y documentar su URL.
-7. Agregar su frontend (por ejemplo `frontend-pedidos/`) para crear pedidos
-   desde una pantalla, sin tener que publicar eventos manualmente.
+El responsable de Pedidos debe mantener la publicación JSON de `pedido.creado`
+en `kds.exchange` y consumir `pedido.estado.actualizado` en su cola propia.
+El equipo de Cocina no modifica ni toma propiedad del código de esos servicios.
+La UI de Pedidos tampoco está incluida; corresponde a ese equipo entregarla
+para que la exposición se realice visualmente.
 
 No usar la cola `cocina.pedidos.queue` como cola de Pedidos. Las colas son
 independientes y se enlazan al exchange compartido por sus routing keys.
@@ -841,10 +854,10 @@ mostrar su flujo sin usar Postman o comandos como interacción principal.
 2. **ms-pedidos.** Publicar `pedido.creado` con `contentType=application/json`
    y consumir `pedido.estado.actualizado` en su propia cola.
 3. **Gateway.** Enrutar REST y WebSocket.
-4. **Compose.** Levantar `compose.integration.yaml` y comprobar Menu, Cocina,
-   bases, RabbitMQ y frontend.
-5. **Pedidos.** Incorporar `ms-pedidos`, su base y su frontend al Compose; validar
-   publicación/consumo real de los eventos.
+4. **Compose.** Levantar `compose.integration.yaml` y comprobar Menu, Pedidos,
+   Cocina, bases, RabbitMQ y frontend Cocina.
+5. **Pedidos.** Servicio y base ya están en Compose; su equipo debe entregar el
+   frontend y mantener sus contratos/eventos.
 6. **Gateway.** Enrutar APIs y WebSockets; cambiar los frontends para usar el
    Gateway en el entorno integrado.
 7. **Ensayo visual.** Ejecutar el recorrido Menú → Pedido → Cocina → estado

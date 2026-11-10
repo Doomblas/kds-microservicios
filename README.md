@@ -5,9 +5,10 @@ WebSockets, PostgreSQL and Docker.
 
 ## Entorno de integración disponible
 
-En la rama actual están `ms-menu`, `ms-display-cocina` y su frontend de Cocina.
-El microservicio `ms-pedidos` debe incorporarse por su responsable para poder
-ejecutar el flujo completo pedido → cocina.
+El entorno compartido levanta `ms-menu`, `ms-pedidos`, `ms-display-cocina`,
+sus bases de datos y RabbitMQ. La responsabilidad de este equipo sigue siendo
+`ms-display-cocina` y su frontend; Menu y Pedidos son dependencias mantenidas
+por sus respectivos responsables.
 
 ```bash
 cp .env.example .env
@@ -17,6 +18,7 @@ docker compose -f compose.integration.yaml up --build -d
 - Frontend Cocina: <http://localhost:5175>
 - API Menu: <http://localhost:8081>
 - API Cocina: <http://localhost:8084/ordenes>
+- API Pedidos: <http://localhost:8085/pedidos>
 - RabbitMQ Management: <http://localhost:15673>
 
 La guía de despliegue, contratos y pruebas entre responsables está en
