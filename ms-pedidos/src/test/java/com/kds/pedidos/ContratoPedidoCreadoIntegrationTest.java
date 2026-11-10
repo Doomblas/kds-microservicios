@@ -1,4 +1,4 @@
-
+package com.kds.pedidos;
 
 import com.kds.pedidos.dto.PedidoCreadoEvent;
 import org.junit.jupiter.api.Test;
