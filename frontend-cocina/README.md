@@ -1,6 +1,6 @@
 # Frontend Cocina — KDS
 
-Panel de órdenes para cocina: tablero por estado, actualización de estado por REST y nuevas comandas en tiempo real por STOMP/WebSocket. Diseño oscuro con paneles glass inspirado en `referencia-st/liquid-glass`, ajustado para mantener legibilidad y contraste en una pantalla operativa.
+Panel de órdenes para cocina: tablero por estado, actualización de estado por REST y nuevas comandas en tiempo real por STOMP/WebSocket. Diseño claro, blanco y de alto contraste, con paneles glass inspirados en `referencia-st/liquid-glass`, adaptados para una pantalla operativa.
 
 ## Requisitos
 
