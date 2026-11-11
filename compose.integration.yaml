@@ -125,13 +125,31 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  api-gateway:
+    build:
+      context: ./api-gateway
+    environment:
+      MS_MENU_URI: http://ms-menu:8080
+      MS_PEDIDOS_URI: http://ms-pedidos:8082
+      MS_DISPLAY_COCINA_URI: http://ms-display-cocina:8083
+      MS_PEDIDOS_WS_URI: ws://ms-pedidos:8082
+      MS_DISPLAY_COCINA_WS_URI: ws://ms-display-cocina:8083
+      GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS: "${GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5174,http://localhost:5175,http://localhost:5176}"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - ms-menu
+      - ms-pedidos
+      - ms-display-cocina
+
   frontend-menu:
     build:
       context: ./frontend-menu
     ports:
       - "5174:80"
     depends_on:
-      - ms-menu
+      api-gateway:
+        condition: service_healthy
 
   frontend-cocina:
     build:
@@ -139,7 +157,8 @@ services:
     ports:
       - "5175:80"
     depends_on:
-      - ms-display-cocina
+      api-gateway:
+        condition: service_healthy
 
   frontend-pedidos:
     build:
@@ -147,8 +166,8 @@ services:
     ports:
       - "5176:80"
     depends_on:
-      - ms-pedidos
-      - ms-menu
+      api-gateway:
+        condition: service_healthy
 
 volumes:
   menu-db-data:
