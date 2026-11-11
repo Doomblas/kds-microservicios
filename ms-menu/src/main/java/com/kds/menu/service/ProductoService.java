@@ -1,6 +1,9 @@
 package com.kds.menu.service;
 
 import com.kds.menu.dto.ProductoRequest;
+import com.kds.menu.exception.CategoriaNoEncontradaException;
+import com.kds.menu.exception.ProductoNoEncontradoException;
+import com.kds.menu.exception.SolicitudInvalidaException;
 import com.kds.menu.model.Categoria;
 import com.kds.menu.model.Producto;
 import com.kds.menu.repository.CategoriaRepository;
@@ -36,7 +39,7 @@ public class ProductoService {
 
         Categoria categoria = categoriaRepository
                 .findById(request.getCategoriaId())
-                .orElseThrow(() -> new RuntimeException("Categoria no encontrada"));
+                .orElseThrow(() -> new CategoriaNoEncontradaException(request.getCategoriaId()));
 
         Producto producto = new Producto();
 
@@ -45,6 +48,40 @@ public class ProductoService {
         producto.setPrecio(request.getPrecio());
         producto.setDisponible(request.getDisponible());
         producto.setCategoria(categoria);
+
+        return productoRepository.save(producto);
+    }
+
+    public Producto actualizar(Long id, ProductoRequest request) {
+
+        Producto producto = productoRepository
+                .findById(id)
+                .orElseThrow(() -> new ProductoNoEncontradoException(id));
+
+        Categoria categoria = categoriaRepository
+                .findById(request.getCategoriaId())
+                .orElseThrow(() -> new CategoriaNoEncontradaException(request.getCategoriaId()));
+
+        producto.setNombre(request.getNombre());
+        producto.setDescripcion(request.getDescripcion());
+        producto.setPrecio(request.getPrecio());
+        producto.setDisponible(request.getDisponible());
+        producto.setCategoria(categoria);
+
+        return productoRepository.save(producto);
+    }
+
+    public Producto actualizarDisponibilidad(Long id, Boolean disponible) {
+
+        if (disponible == null) {
+            throw new SolicitudInvalidaException("El campo disponible es obligatorio");
+        }
+
+        Producto producto = productoRepository
+                .findById(id)
+                .orElseThrow(() -> new ProductoNoEncontradoException(id));
+
+        producto.setDisponible(disponible);
 
         return productoRepository.save(producto);
     }
