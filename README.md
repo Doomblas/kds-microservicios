@@ -25,4 +25,9 @@ docker compose -f compose.integration.yaml up --build -d
 
 La guía de despliegue, contratos y pruebas entre responsables está en
 [`docs/GUIA_INTEGRACION_DISPLAY_COCINA.md`](docs/GUIA_INTEGRACION_DISPLAY_COCINA.md).
+Para la siguiente etapa, consultar la
+[`guía del Gateway`](docs/GUIA_GATEWAY_KDS.md) y la
+[`prueba distribuida en tres PC`](docs/GUIA_PRUEBA_KDS_TRES_PC.md).
+El Compose anterior es para **una sola máquina**: no configura automáticamente
+las conexiones de red entre tres equipos.
 Las claves de `.env.example` son únicamente para desarrollo local/exposición.
