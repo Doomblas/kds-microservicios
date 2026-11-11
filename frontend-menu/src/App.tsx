@@ -11,6 +11,13 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
+import { AccessDenied } from './auth/AccessDenied'
+import { AuthLoading } from './auth/AuthLoading'
+import { AuthScreen } from './auth/AuthScreen'
+import { PendingAccount } from './auth/PendingAccount'
+import { useAuth } from './auth/useAuth'
+import { UserManagement } from './auth/UserManagement'
+import type { Usuario } from './auth/types'
 import { AvailabilityFilter } from './components/AvailabilityFilter'
 import { CategoryDrawer } from './components/CategoryDrawer'
 import { CategoryFilter } from './components/CategoryFilter'
@@ -31,7 +38,13 @@ import { getErrorMessage } from './services/menuApi'
 import type { CategoriaPayload, Producto, ProductoPayload } from './types/menu'
 import { calculateAvailabilityPercentage } from './utils/format'
 
-function App() {
+interface MenuDashboardProps {
+  user: Usuario
+  onLogout: (message?: string) => void
+}
+
+function MenuDashboard({ user, onLogout }: MenuDashboardProps) {
+  const [view, setView] = useState<'menu' | 'usuarios'>('menu')
   const {
     categorias,
     productos,
@@ -95,11 +108,13 @@ function App() {
         ) ?? null)
 
   const handleNewCategory = () => {
+    setView('menu')
     setProductDrawerOpen(false)
     setCategoryDrawerOpen(true)
   }
 
   const handleNewProduct = (categoryId?: number) => {
+    setView('menu')
     setCategoryDrawerOpen(false)
     setEditingProduct(null)
     setPresetCategoryId(categoryId)
@@ -107,10 +122,17 @@ function App() {
   }
 
   const handleEditProduct = (producto: Producto) => {
+    setView('menu')
     setCategoryDrawerOpen(false)
     setEditingProduct(producto)
     setPresetCategoryId(undefined)
     setProductDrawerOpen(true)
+  }
+
+  const handleOpenUsers = () => {
+    setProductDrawerOpen(false)
+    setCategoryDrawerOpen(false)
+    setView('usuarios')
   }
 
   const handleRefresh = async () => {
@@ -253,6 +275,8 @@ function App() {
     )
   }
 
+  const showingUsers = view === 'usuarios' && user.rol === 'ADMIN'
+
   return (
     <div className="app-shell">
       <Header
@@ -260,137 +284,150 @@ function App() {
         actionsDisabled={actionsBlocked}
         newProductDisabled={newProductDisabled}
         newProductHint={newProductHint}
+        user={user}
+        usersActive={showingUsers}
         onNewCategory={handleNewCategory}
         onNewProduct={() => handleNewProduct()}
+        onOpenUsers={user.rol === 'ADMIN' ? handleOpenUsers : undefined}
+        onLogout={() => onLogout()}
       />
 
-      <main className="page" aria-busy={loading}>
-        {!loading && !(error && !hasData) && (
+      <main className="page" aria-busy={showingUsers ? false : loading}>
+        {showingUsers ? (
+          <UserManagement
+            currentUser={user}
+            onBack={() => setView('menu')}
+          />
+        ) : (
           <>
-            {error && hasData && (
-              <div className="inline-error" role="alert">
-                <AlertTriangle size={19} aria-hidden="true" />
-                <p>
-                  <strong>No se pudo actualizar el catálogo.</strong> {error}
-                </p>
+          {!loading && !(error && !hasData) && (
+            <>
+              {error && hasData && (
+                <div className="inline-error" role="alert">
+                  <AlertTriangle size={19} aria-hidden="true" />
+                  <p>
+                    <strong>No se pudo actualizar el catálogo.</strong> {error}
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-small"
+                    onClick={() => {
+                      void handleRefresh()
+                    }}
+                    disabled={refreshing}
+                  >
+                    <RefreshCw
+                      size={15}
+                      className={refreshing ? 'spin' : undefined}
+                      aria-hidden="true"
+                    />
+                    Reintentar
+                  </button>
+                </div>
+              )}
+  
+              <Hero
+                available={productosDisponibles}
+                total={totalProductos}
+                percentage={availabilityPercentage}
+                onNewCategory={handleNewCategory}
+                onNewProduct={() => handleNewProduct()}
+                actionsDisabled={actionsBlocked}
+                newProductDisabled={newProductDisabled}
+                newProductHint={newProductHint}
+              />
+  
+              <section className="metric-grid" aria-label="Métricas del menú">
+                <MetricCard
+                  label="Total de Productos"
+                  value={totalProductos}
+                  helper="Registrados en el catálogo"
+                  icon={Layers3}
+                />
+                <MetricCard
+                  label="Productos Disponibles"
+                  value={productosDisponibles}
+                  helper="Listos para la venta"
+                  icon={CheckCircle2}
+                  variant="accent"
+                />
+                <MetricCard
+                  label="No Disponibles"
+                  value={productosNoDisponibles}
+                  helper="Pausados temporalmente"
+                  icon={XCircle}
+                  variant="danger"
+                />
+                <MetricCard
+                  label="Total de Categorías"
+                  value={totalCategorias}
+                  helper="Secciones activas del menú"
+                  icon={FolderOpen}
+                />
+              </section>
+  
+              <section className="control-bar" aria-label="Buscar y filtrar">
+                <SearchBar value={query} onChange={setQuery} />
+                <AvailabilityFilter
+                  value={availability}
+                  counts={availabilityCounts}
+                  onChange={setAvailability}
+                />
                 <button
                   type="button"
-                  className="btn btn-ghost btn-small"
+                  className="icon-button refresh-button"
                   onClick={() => {
                     void handleRefresh()
                   }}
                   disabled={refreshing}
+                  aria-label="Actualizar catálogo"
+                  title="Actualizar catálogo"
                 >
                   <RefreshCw
-                    size={15}
+                    size={18}
                     className={refreshing ? 'spin' : undefined}
                     aria-hidden="true"
                   />
-                  Reintentar
                 </button>
-              </div>
-            )}
-
-            <Hero
-              available={productosDisponibles}
-              total={totalProductos}
-              percentage={availabilityPercentage}
-              onNewCategory={handleNewCategory}
-              onNewProduct={() => handleNewProduct()}
-              actionsDisabled={actionsBlocked}
-              newProductDisabled={newProductDisabled}
-              newProductHint={newProductHint}
-            />
-
-            <section className="metric-grid" aria-label="Métricas del menú">
-              <MetricCard
-                label="Total de Productos"
-                value={totalProductos}
-                helper="Registrados en el catálogo"
-                icon={Layers3}
+              </section>
+  
+              <CategoryFilter
+                options={categoryOptions}
+                selectedId={selectedCategoryId}
+                onSelect={setSelectedCategoryId}
               />
-              <MetricCard
-                label="Productos Disponibles"
-                value={productosDisponibles}
-                helper="Listos para la venta"
-                icon={CheckCircle2}
-                variant="accent"
-              />
-              <MetricCard
-                label="No Disponibles"
-                value={productosNoDisponibles}
-                helper="Pausados temporalmente"
-                icon={XCircle}
-                variant="danger"
-              />
-              <MetricCard
-                label="Total de Categorías"
-                value={totalCategorias}
-                helper="Secciones activas del menú"
-                icon={FolderOpen}
-              />
-            </section>
-
-            <section className="control-bar" aria-label="Buscar y filtrar">
-              <SearchBar value={query} onChange={setQuery} />
-              <AvailabilityFilter
-                value={availability}
-                counts={availabilityCounts}
-                onChange={setAvailability}
-              />
-              <button
-                type="button"
-                className="icon-button refresh-button"
-                onClick={() => {
-                  void handleRefresh()
-                }}
-                disabled={refreshing}
-                aria-label="Actualizar catálogo"
-                title="Actualizar catálogo"
-              >
-                <RefreshCw
-                  size={18}
-                  className={refreshing ? 'spin' : undefined}
-                  aria-hidden="true"
-                />
-              </button>
-            </section>
-
-            <CategoryFilter
-              options={categoryOptions}
-              selectedId={selectedCategoryId}
-              onSelect={setSelectedCategoryId}
-            />
-
-            {filteredProducts.length > 0 && (
-              <div className="results-row">
-                <span aria-live="polite">
-                  Mostrando <strong>{filteredProducts.length}</strong> de{' '}
-                  <strong>{totalProductos}</strong> productos
-                </span>
-                {hasActiveFilters && (
-                  <button
-                    type="button"
-                    className="text-button"
-                    onClick={clearFilters}
-                  >
-                    Limpiar filtros
-                  </button>
-                )}
-              </div>
-            )}
+  
+              {filteredProducts.length > 0 && (
+                <div className="results-row">
+                  <span aria-live="polite">
+                    Mostrando <strong>{filteredProducts.length}</strong> de{' '}
+                    <strong>{totalProductos}</strong> productos
+                  </span>
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={clearFilters}
+                    >
+                      Limpiar filtros
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+  
+          {renderCatalog()}
+  
+          {!loading && !(error && !hasData) && (
+            <footer className="app-footer">
+              <span>KDS v1.0 · Administración de menú</span>
+              <span>
+                {totalProductos} productos · {totalCategorias} categorías
+              </span>
+            </footer>
+          )}
           </>
-        )}
-
-        {renderCatalog()}
-
-        {!loading && !(error && !hasData) && (
-          <footer className="app-footer">
-            <span>KDS v1.0 · Administración de menú</span>
-            <span>
-              {totalProductos} productos · {totalCategorias} categorías
-            </span>
-          </footer>
         )}
       </main>
 
@@ -412,6 +449,67 @@ function App() {
       <ToastViewport toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
+}
+
+function App() {
+  const {
+    status,
+    user,
+    notice,
+    login,
+    register,
+    logout,
+    refreshUser,
+    clearNotice,
+  } = useAuth()
+
+  if (status === 'loading') {
+    return <AuthLoading />
+  }
+
+  if (status === 'anonymous' || !user) {
+    return (
+      <AuthScreen
+        notice={notice}
+        onLogin={login}
+        onRegister={register}
+        onClearNotice={clearNotice}
+      />
+    )
+  }
+
+  if (user.estado === 'BLOQUEADO') {
+    return (
+      <AccessDenied
+        user={user}
+        onLogout={logout}
+        reason="blocked"
+      />
+    )
+  }
+
+  if (user.estado === 'PENDIENTE' || !user.rol) {
+    return (
+      <PendingAccount
+        user={user}
+        onRefresh={refreshUser}
+        onLogout={logout}
+      />
+    )
+  }
+
+  if (user.rol !== 'ADMIN' && user.rol !== 'GESTOR_MENU') {
+    return (
+      <AccessDenied
+        user={user}
+        onLogout={logout}
+        moduleName="la administración del menú"
+        allowedRoles="Administrador o Gestor de menú"
+      />
+    )
+  }
+
+  return <MenuDashboard user={user} onLogout={logout} />
 }
 
 export default App

@@ -71,6 +71,13 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://menu-db:5432/menu_db
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      # Autenticación: ms-menu es el único emisor de tokens y guarda las cuentas.
+      JWT_SECRET: ${JWT_SECRET:-kds-dev-only-secret-change-me-please-2026}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-30}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrador KDS}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5174,http://localhost:5175,http://localhost:5176}
     ports:
       - "8081:8080"
     depends_on:
@@ -93,6 +100,9 @@ services:
       RABBITMQ_VHOST: /
       MENU_BASE_URL: http://ms-menu:8080
       WS_ALLOWED_ORIGINS: "*"
+      # Mismo secreto que ms-menu: aquí solo se valida el JWT, sin acceso a la BD.
+      JWT_SECRET: ${JWT_SECRET:-kds-dev-only-secret-change-me-please-2026}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5174,http://localhost:5175,http://localhost:5176}
     ports:
       - "8085:8082"
     depends_on:
@@ -117,6 +127,9 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-root}
       RABBITMQ_VHOST: /
       WS_ALLOWED_ORIGINS: "*"
+      # Mismo secreto que ms-menu: aquí solo se valida el JWT, sin acceso a la BD.
+      JWT_SECRET: ${JWT_SECRET:-kds-dev-only-secret-change-me-please-2026}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5174,http://localhost:5175,http://localhost:5176}
     ports:
       - "8084:8083"
     depends_on:

@@ -19,6 +19,19 @@ spring:
               predicates:
                 - Path=/categorias,/categorias/**
 
+            # Autenticación y administración de usuarios viven en ms-menu,
+            # que es el servicio administrativo existente. El Gateway solo
+            # enruta; no se convierte en un microservicio de negocio.
+            - id: ms-menu-auth
+              uri: "${MS_MENU_URI:http://localhost:8081}"
+              predicates:
+                - Path=/auth,/auth/**
+
+            - id: ms-menu-usuarios
+              uri: "${MS_MENU_URI:http://localhost:8081}"
+              predicates:
+                - Path=/usuarios,/usuarios/**
+
             - id: ms-pedidos-rest
               uri: "${MS_PEDIDOS_URI:http://localhost:8085}"
               predicates:

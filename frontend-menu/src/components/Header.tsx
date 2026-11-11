@@ -1,4 +1,6 @@
-import { FolderPlus, Plus } from 'lucide-react'
+import { FolderPlus, LogOut, Plus, Users } from 'lucide-react'
+import { rolLabel } from '../auth/types'
+import type { Usuario } from '../auth/types'
 
 export type ConnectionState = 'loading' | 'online' | 'offline'
 
@@ -7,8 +9,12 @@ interface HeaderProps {
   actionsDisabled: boolean
   newProductDisabled: boolean
   newProductHint?: string
+  user: Usuario
+  usersActive: boolean
   onNewCategory: () => void
   onNewProduct: () => void
+  onOpenUsers?: () => void
+  onLogout: () => void
 }
 
 const connectionLabels: Record<ConnectionState, string> = {
@@ -17,13 +23,26 @@ const connectionLabels: Record<ConnectionState, string> = {
   offline: 'Sin conexión',
 }
 
+function initials(nombre: string) {
+  return nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
 export function Header({
   connection,
   actionsDisabled,
   newProductDisabled,
   newProductHint,
+  user,
+  usersActive,
   onNewCategory,
   onNewProduct,
+  onOpenUsers,
+  onLogout,
 }: HeaderProps) {
   return (
     <header className="app-header">
@@ -55,6 +74,22 @@ export function Header({
             </span>
           </span>
 
+          {onOpenUsers && (
+            <button
+              type="button"
+              className={`btn btn-ghost header-users-button ${
+                usersActive ? 'is-active' : ''
+              }`}
+              onClick={onOpenUsers}
+              aria-label="Administración de usuarios"
+              aria-pressed={usersActive}
+              title="Usuarios y roles"
+            >
+              <Users size={18} aria-hidden="true" />
+              <span>Usuarios</span>
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn-ghost"
@@ -77,6 +112,31 @@ export function Header({
           >
             <Plus size={18} aria-hidden="true" />
             <span>Nuevo Producto</span>
+          </button>
+
+          <div
+            className="session-user"
+            title={`${user.nombre} · ${
+              user.rol ? rolLabel[user.rol] : 'Sin rol'
+            }`}
+          >
+            <span className="session-avatar" aria-hidden="true">
+              {initials(user.nombre)}
+            </span>
+            <span className="session-meta">
+              <strong>{user.nombre}</strong>
+              <span>{user.rol ? rolLabel[user.rol] : 'Sin rol'}</span>
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="icon-button session-logout"
+            onClick={onLogout}
+            aria-label="Cerrar sesión"
+            title="Cerrar sesión"
+          >
+            <LogOut size={18} aria-hidden="true" />
           </button>
         </div>
       </div>
