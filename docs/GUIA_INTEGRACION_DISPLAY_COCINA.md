@@ -360,9 +360,9 @@ Sin `contentType=application/json`, el listener rechaza el mensaje.
 | Tarea | Depende de | Notas |
 |---|---|---|
 | Mantener `ms-pedidos`, publicar `pedido.creado` y consumir `pedido.estado.actualizado` | Equipo de Pedidos | Servicio en `develop`; contrato e integración técnica probados, mantenimiento a cargo de su responsable |
-| Agregar rutas al API Gateway | Equipo de Gateway | `/ordenes/**` y `/ws` hacia `:8083` |
+| Mantener rutas del API Gateway | Equipo de Gateway | REST y WebSocket implementados en `api-gateway/`; validar en cada entorno |
 | Integrar `ms-pedidos` al Compose | Equipo de integración | Ya configurado en `compose.integration.yaml`; no implica asumir su desarrollo |
-| Desplegar frontend Cocina detrás del Gateway | Equipo de Gateway/Frontend | Ya tiene Nginx proxy para pruebas locales; falta validar Gateway |
+| Desplegar frontend Cocina detrás del Gateway | Equipo de Gateway/Frontend | Nginx enruta `/ordenes` y `/ws` por `api-gateway:8080` |
 | CORS/proxy para producción | Equipo de Gateway/Frontend | Configurar orígenes y URL pública según despliegue |
 | Colección Postman | Equipo | `GET`, `GET/{id}`, `PATCH` |
 | Medir propagación | Equipo | Pedido creado → visible; estado → Pedidos |
@@ -596,25 +596,34 @@ Rutas requeridas:
 
 | Ruta pública | Destino | Tipo |
 |---|---|---|
-| `/ordenes/**` | `ms-display-cocina:8083` | HTTP |
-| `/ws` o `/ws/**` | `ms-display-cocina:8083` | WebSocket |
-| `/swagger-ui/**`, `/v3/api-docs` | Opcional | HTTP |
+| `/productos`, `/productos/**` | `ms-menu:8080` | HTTP |
+| `/categorias`, `/categorias/**` | `ms-menu:8080` | HTTP |
+| `/pedidos`, `/pedidos/**` | `ms-pedidos:8082` | HTTP |
+| `/ordenes`, `/ordenes/**` | `ms-display-cocina:8083` | HTTP |
+| `/ws/pedidos`, `/ws/pedidos/**` | `ws://ms-pedidos:8082/ws` | WebSocket STOMP |
+| `/ws/cocina`, `/ws/cocina/**` | `ws://ms-display-cocina:8083/ws` | WebSocket STOMP |
 
-Ejemplo con Spring Cloud Gateway:
+`ms-pedidos` y `ms-display-cocina` exponen ambos `/ws`. Para evitar rutas
+ambiguas, el Gateway publica `/ws/pedidos` y `/ws/cocina`, y reescribe cada una
+al `/ws` interno que el backend ya espera. Los tópicos no cambian:
+`/topic/pedidos` y `/topic/cocina`.
+
+Configuración real en `api-gateway/src/main/resources/application.yml`,
+namespace `spring.cloud.gateway.server.webflux`. Ejemplo de la ruta WebSocket:
 
 ```yaml
 spring:
   cloud:
     gateway:
-      routes:
-        - id: display-cocina
-          uri: http://ms-display-cocina:8083
-          predicates:
-            - Path=/ordenes/**
-        - id: display-cocina-ws
-          uri: ws://ms-display-cocina:8083
-          predicates:
-            - Path=/ws/**
+      server:
+        webflux:
+          routes:
+            - id: display-cocina-ws
+              uri: ws://ms-display-cocina:8083
+              predicates:
+                - Path=/ws/cocina,/ws/cocina/**
+              filters:
+                - 'RewritePath=/ws/cocina(?<segment>/?.*), /ws$\{segment}'
 ```
 
 Si se usa descubrimiento de servicios, el esquema suele ser
@@ -643,7 +652,8 @@ Verificación:
 ```bash
 curl http://localhost:8080/ordenes
 # y desde el frontend o Postman:
-# ws://localhost:8080/ws  -> SUBSCRIBE /topic/cocina
+# ws://localhost:8080/ws/cocina  -> SUBSCRIBE /topic/cocina
+# ws://localhost:8080/ws/pedidos -> SUBSCRIBE /topic/pedidos
 ```
 
 ---
