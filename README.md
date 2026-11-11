@@ -15,6 +15,7 @@ cp .env.example .env
 docker compose -f compose.integration.yaml up --build -d
 ```
 
+- Frontend Menu: <http://localhost:5174>
 - Frontend Cocina: <http://localhost:5175>
 - Frontend Pedidos (caja): <http://localhost:5176>
 - API Menu: <http://localhost:8081>
