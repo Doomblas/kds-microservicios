@@ -125,6 +125,14 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  frontend-menu:
+    build:
+      context: ./frontend-menu
+    ports:
+      - "5174:80"
+    depends_on:
+      - ms-menu
+
   frontend-cocina:
     build:
       context: ./frontend-cocina
