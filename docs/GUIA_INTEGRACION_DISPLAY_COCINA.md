@@ -650,6 +650,21 @@ curl http://localhost:8080/ordenes
 
 ### 9.4 Integración con el frontend de cocina
 
+`frontend-cocina/` ya incluye el tablero operativo con el estilo Culinary
+Operations (verde bosque/lima), búsqueda y filtros, pulso de cocina, estados de
+carga/error/vacío y controles táctiles accesibles. Los cambios son visuales y de
+interacción: los contratos REST y STOMP de abajo no cambian. Las referencias
+locales `stitch*/` no se versionan ni se requieren para construir su imagen.
+
+Para levantar sólo nuestra entrega y sus dependencias:
+
+```bash
+docker compose -f compose.integration.yaml up --build -d frontend-cocina
+```
+
+Abrir `http://localhost:5175`. Las pruebas de navegador y la guía de uso están
+en [`frontend-cocina/README.md`](../frontend-cocina/README.md).
+
 El frontend debe usar **STOMP nativo**, no SockJS.
 
 ```js

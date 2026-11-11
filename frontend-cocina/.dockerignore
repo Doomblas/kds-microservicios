@@ -6,3 +6,7 @@ dist/
 .env.*
 !.env.example
 *.md
+tests/
+test-results/
+playwright-report/
+playwright.config.ts
