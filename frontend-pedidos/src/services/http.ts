@@ -1,4 +1,9 @@
 import type { ApiErrorPayload } from '../types/pedidos'
+import {
+  authHeaders,
+  clearSession,
+  notifyUnauthorized,
+} from '../auth/session'
 
 const REQUEST_TIMEOUT_MS = 15_000
 
@@ -30,6 +35,7 @@ export async function requestJson<T>(
         headers: {
           Accept: 'application/json',
           ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+          ...authHeaders(),
           ...init.headers,
         },
       })
@@ -47,6 +53,11 @@ export async function requestJson<T>(
       } catch {
         payload = null
       }
+      if (response.status === 401) {
+        clearSession()
+        notifyUnauthorized()
+      }
+
       throw new ApiError(
         payload?.message || `La solicitud falló con estado ${response.status}.`,
         response.status,

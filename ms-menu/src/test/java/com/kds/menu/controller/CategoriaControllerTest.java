@@ -1,11 +1,13 @@
 package com.kds.menu.controller;
 
+import com.kds.menu.auth.security.JwtService;
 import com.kds.menu.dto.CategoriaRequest;
 import com.kds.menu.exception.RecursoDuplicadoException;
 import com.kds.menu.model.Categoria;
 import com.kds.menu.service.CategoriaService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -25,6 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = CategoriaController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class CategoriaControllerTest {
 
     private static final String CATEGORIA_VALIDA_JSON = """
@@ -46,6 +49,13 @@ class CategoriaControllerTest {
 
     @MockitoBean
     private CategoriaService categoriaService;
+
+    /**
+     * El filtro de JWT se registra en el slice de pruebas, pero estas pruebas
+     * validan el contrato del controlador sin cadena de seguridad.
+     */
+    @MockitoBean
+    private JwtService jwtService;
 
     @Test
     void listarCategorias_debeDevolver200ConElListado() throws Exception {

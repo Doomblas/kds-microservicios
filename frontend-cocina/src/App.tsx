@@ -10,6 +10,7 @@ import {
   Clock3,
   Flame,
   Inbox,
+  LogOut,
   Maximize2,
   Minimize2,
   RefreshCw,
@@ -20,6 +21,18 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AccessDenied } from './auth/AccessDenied'
+import { AuthLoading } from './auth/AuthLoading'
+import { AuthScreen } from './auth/AuthScreen'
+import { PendingAccount } from './auth/PendingAccount'
+import {
+  authHeaders,
+  clearSession,
+  notifyUnauthorized,
+} from './auth/session'
+import { rolLabel } from './auth/types'
+import type { Usuario } from './auth/types'
+import { useAuth } from './auth/useAuth'
 import { KitchenPulse } from './components/KitchenPulse'
 import { OrderCard } from './components/OrderCard'
 import type { Estado, NotificacionNueva, Orden, Toast } from './types'
@@ -38,7 +51,21 @@ function wsUrl() {
   return `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
 }
 
-function App() {
+function initials(nombre: string) {
+  return nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
+interface CocinaDashboardProps {
+  user: Usuario
+  onLogout: (message?: string) => void
+}
+
+function CocinaDashboard({ user, onLogout }: CocinaDashboardProps) {
   const [orders, setOrders] = useState<Orden[]>([])
   const [connected, setConnected] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -68,8 +95,14 @@ function App() {
     if (quiet) setRefreshing(true)
     else setLoading(true)
     try {
-      const response = await fetch(`${API}/ordenes`, { headers: { Accept: 'application/json' }, signal: controller.signal })
-      if (!response.ok) throw new Error(`El servicio de Cocina respondió con un error (${response.status}).`)
+      const response = await fetch(`${API}/ordenes`, { headers: { Accept: 'application/json', ...authHeaders() }, signal: controller.signal })
+      if (!response.ok) {
+        if (response.status === 401) {
+          clearSession()
+          notifyUnauthorized()
+        }
+        throw new Error(`El servicio de Cocina respondió con un error (${response.status}).`)
+      }
       const data = (await response.json()) as Orden[]
       if (!Array.isArray(data)) throw new Error('El servicio devolvió una respuesta inesperada.')
       if (controller.signal.aborted) return
@@ -211,10 +244,14 @@ function App() {
     try {
       const response = await fetch(`${API}/ordenes/${order.id}/estado`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...authHeaders() },
         body: JSON.stringify({ estado: next }),
       })
       if (!response.ok) {
+        if (response.status === 401) {
+          clearSession()
+          notifyUnauthorized()
+        }
         const body = await response.json().catch(() => null) as { message?: string } | null
         if (response.status === 409 || response.status === 404) void loadOrders(true)
         throw new Error(body?.message ?? `No se pudo actualizar la comanda (${response.status}).`)
@@ -284,6 +321,23 @@ function App() {
               {error ? 'Sin sincronizar' : connected ? 'En vivo' : 'Reconectando'}
             </span>
             <span className="header-divider" aria-hidden="true" />
+            <div
+              className="session-user"
+              title={`${user.nombre} · ${
+                user.rol ? rolLabel[user.rol] : 'Sin rol'
+              }`}
+            >
+              <span className="session-avatar" aria-hidden="true">
+                {initials(user.nombre)}
+              </span>
+              <span className="session-meta">
+                <strong>{user.nombre}</strong>
+                <span>{user.rol ? rolLabel[user.rol] : 'Sin rol'}</span>
+              </span>
+            </div>
+            <button className="icon-button session-logout" type="button" onClick={() => onLogout()} aria-label="Cerrar sesión" title="Cerrar sesión">
+              <LogOut size={19} aria-hidden="true" />
+            </button>
             <button className={`icon-button ${soundEnabled ? 'active' : ''}`} type="button" onClick={() => void toggleSound()} aria-pressed={soundEnabled} aria-label="Aviso sonoro de nuevas comandas" title={soundEnabled ? 'Desactivar sonido' : 'Activar sonido'}>
               {soundEnabled ? <Bell size={19} aria-hidden="true" /> : <BellOff size={19} aria-hidden="true" />}
             </button>
@@ -395,6 +449,61 @@ function App() {
       </div>}
     </>
   )
+}
+
+function App() {
+  const {
+    status,
+    user,
+    notice,
+    login,
+    register,
+    logout,
+    refreshUser,
+    clearNotice,
+  } = useAuth()
+
+  if (status === 'loading') {
+    return <AuthLoading />
+  }
+
+  if (status === 'anonymous' || !user) {
+    return (
+      <AuthScreen
+        notice={notice}
+        onLogin={login}
+        onRegister={register}
+        onClearNotice={clearNotice}
+      />
+    )
+  }
+
+  if (user.estado === 'BLOQUEADO') {
+    return <AccessDenied user={user} onLogout={logout} reason="blocked" />
+  }
+
+  if (user.estado === 'PENDIENTE' || !user.rol) {
+    return (
+      <PendingAccount
+        user={user}
+        onRefresh={refreshUser}
+        onLogout={logout}
+      />
+    )
+  }
+
+  if (user.rol !== 'ADMIN' && user.rol !== 'COCINA') {
+    return (
+      <AccessDenied
+        user={user}
+        onLogout={logout}
+        moduleName="la estación de cocina"
+        allowedRoles="Administrador o Cocina"
+      />
+    )
+  }
+
+  return <CocinaDashboard user={user} onLogout={logout} />
 }
 
 export default App

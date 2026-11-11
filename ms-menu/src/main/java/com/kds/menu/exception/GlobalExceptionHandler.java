@@ -1,5 +1,10 @@
 package com.kds.menu.exception;
 
+import com.kds.menu.auth.exception.CredencialesInvalidasException;
+import com.kds.menu.auth.exception.CuentaBloqueadaException;
+import com.kds.menu.auth.exception.NoAutenticadoException;
+import com.kds.menu.auth.exception.OperacionUsuarioNoPermitidaException;
+import com.kds.menu.auth.exception.UsuarioNoEncontradoException;
 import com.kds.menu.dto.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -35,6 +40,46 @@ public class GlobalExceptionHandler {
             HttpServletRequest request) {
 
         return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(UsuarioNoEncontradoException.class)
+    public ResponseEntity<ApiError> handleUsuarioNoEncontrado(
+            UsuarioNoEncontradoException exception,
+            HttpServletRequest request) {
+
+        return buildResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    public ResponseEntity<ApiError> handleCredencialesInvalidas(
+            CredencialesInvalidasException exception,
+            HttpServletRequest request) {
+
+        return buildResponse(HttpStatus.UNAUTHORIZED, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(NoAutenticadoException.class)
+    public ResponseEntity<ApiError> handleNoAutenticado(
+            NoAutenticadoException exception,
+            HttpServletRequest request) {
+
+        return buildResponse(HttpStatus.UNAUTHORIZED, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(CuentaBloqueadaException.class)
+    public ResponseEntity<ApiError> handleCuentaBloqueada(
+            CuentaBloqueadaException exception,
+            HttpServletRequest request) {
+
+        return buildResponse(HttpStatus.FORBIDDEN, exception.getMessage(), request);
+    }
+
+    @ExceptionHandler(OperacionUsuarioNoPermitidaException.class)
+    public ResponseEntity<ApiError> handleOperacionUsuarioNoPermitida(
+            OperacionUsuarioNoPermitidaException exception,
+            HttpServletRequest request) {
+
+        return buildResponse(HttpStatus.CONFLICT, exception.getMessage(), request);
     }
 
     @ExceptionHandler(RecursoDuplicadoException.class)

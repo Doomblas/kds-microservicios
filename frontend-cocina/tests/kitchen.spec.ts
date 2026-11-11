@@ -1,6 +1,35 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page, type WebSocketRoute } from '@playwright/test'
+import type { Usuario } from '../src/auth/types'
 import type { Orden } from '../src/types'
+
+const testUser: Usuario = {
+  id: 10,
+  nombre: 'Cocina KDS',
+  email: 'cocina@kds.local',
+  rol: 'COCINA',
+  estado: 'ACTIVO',
+  fechaCreacion: new Date().toISOString(),
+}
+
+async function mockSession(
+  page: Page,
+  user: Usuario = testUser,
+  token = 'playwright-test-token',
+) {
+  await page.addInitScript(
+    ({ sessionToken, sessionUser }) => {
+      window.localStorage.setItem('kds.auth.token', sessionToken)
+      window.localStorage.setItem(
+        'kds.auth.user',
+        JSON.stringify(sessionUser),
+      )
+    },
+    { sessionToken: token, sessionUser: user },
+  )
+  await page.route('**/auth/me', (route) => route.fulfill({ json: user }))
+  return user
+}
 
 function fixtures(now = Date.now()): Orden[] {
   const ago = (minutes: number) => new Date(now - minutes * 60000).toISOString()
@@ -11,7 +40,12 @@ function fixtures(now = Date.now()): Orden[] {
   ]
 }
 
-async function mockKitchen(page: Page, initialOrders = fixtures()) {
+async function mockKitchen(
+  page: Page,
+  initialOrders = fixtures(),
+  session = true,
+) {
+  if (session) await mockSession(page)
   const state = { orders: structuredClone(initialOrders), failRead: false, failPatch: false, patches: [] as string[], sockets: [] as WebSocketRoute[] }
   await page.routeWebSocket('**/ws', (socket) => {
     state.sockets.push(socket)
@@ -116,6 +150,7 @@ test('recibe una comanda por STOMP y muestra aviso visual', async ({ page }) => 
 test('atajo de búsqueda y controles accesibles con teclado', async ({ page }) => {
   await mockKitchen(page)
   await page.goto('/')
+  await expect(page.getByText('En vivo', { exact: true })).toBeVisible()
   await page.keyboard.press('Control+k')
   await expect(page.getByRole('searchbox')).toBeFocused()
   await page.getByRole('button', { name: 'Aviso sonoro de nuevas comandas' }).click()
@@ -145,6 +180,60 @@ test('el reloj avanza en comandas activas pero no en las ya terminadas', async (
   await page.clock.fastForward(125000)
   await expect(active).toContainText('14 min')
   await expect(ready).toContainText('18 min')
+})
+
+test('sin sesión muestra el acceso y permite abrir el registro', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible()
+  await expect(page.locator('.order-card')).toHaveCount(0)
+  await page.getByRole('tab', { name: 'Registrarme' }).click()
+  await expect(page.getByRole('heading', { name: 'Crear cuenta' })).toBeVisible()
+  await expect(page.getByLabel('Nombre completo')).toBeVisible()
+})
+
+test('el login de Cocina entra al tablero y guarda la sesión', async ({ page }) => {
+  await mockKitchen(page, fixtures(), false)
+  await page.route('**/auth/login', (route) =>
+    route.fulfill({
+      json: {
+        token: 'new-session-token',
+        tipo: 'Bearer',
+        expiraEnSegundos: 1800,
+        usuario: testUser,
+      },
+    }),
+  )
+
+  await page.goto('/')
+  await page.getByLabel('Correo electrónico').fill(testUser.email)
+  await page.locator('#auth-password').fill('CocinaSegura123')
+  await page.getByRole('button', { name: 'Ingresar al sistema' }).click()
+
+  await expect(page.getByText('En vivo', { exact: true })).toBeVisible()
+  await expect(page.locator('.order-card')).toHaveCount(3)
+  const token = await page.evaluate(() => window.localStorage.getItem('kds.auth.token'))
+  expect(token).toBe('new-session-token')
+})
+
+test('una cuenta pendiente no accede al tablero de cocina', async ({ page }) => {
+  await mockSession(page, {
+    ...testUser,
+    rol: null,
+    estado: 'PENDIENTE',
+    email: 'pendiente@kds.local',
+  })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'Esperando asignación de rol' })).toBeVisible()
+  await expect(page.locator('.order-card')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Actualizar estado' })).toBeVisible()
+})
+
+test('un rol sin permiso ve la pantalla de acceso denegado', async ({ page }) => {
+  await mockSession(page, { ...testUser, rol: 'CAJA', email: 'caja@kds.local' })
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: 'No tienes acceso a este módulo' })).toBeVisible()
+  await expect(page.getByText(/la estación de cocina/)).toBeVisible()
+  await expect(page.locator('.order-card')).toHaveCount(0)
 })
 
 for (const width of [1440, 1024, 768, 390, 320]) {

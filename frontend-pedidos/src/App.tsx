@@ -3,6 +3,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock3,
+  LogOut,
   Receipt,
   ShoppingBag,
   Signal,
@@ -10,6 +11,13 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AccessDenied } from './auth/AccessDenied'
+import { AuthLoading } from './auth/AuthLoading'
+import { AuthScreen } from './auth/AuthScreen'
+import { PendingAccount } from './auth/PendingAccount'
+import { rolLabel } from './auth/types'
+import type { Usuario } from './auth/types'
+import { useAuth } from './auth/useAuth'
 import { CartPanel } from './components/CartPanel'
 import { PedidoList } from './components/PedidoList'
 import { ProductPicker } from './components/ProductPicker'
@@ -31,7 +39,21 @@ function wsUrl() {
   return `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`
 }
 
-function App() {
+function initials(nombre: string) {
+  return nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
+interface PedidosDashboardProps {
+  user: Usuario
+  onLogout: (message?: string) => void
+}
+
+function PedidosDashboard({ user, onLogout }: PedidosDashboardProps) {
   const [productos, setProductos] = useState<ProductoMenu[]>([])
   const [pedidos, setPedidos] = useState<Pedido[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
@@ -250,21 +272,48 @@ function App() {
               <small>Caja · Kitchen Display System</small>
             </span>
           </a>
-          <span
-            className={`connection-pill ${live ? 'is-connected' : ''}`}
-            role="status"
-          >
-            {live ? (
-              <Signal size={15} aria-hidden="true" />
-            ) : (
-              <SignalZero size={15} aria-hidden="true" />
-            )}
-            {ordersError
-              ? 'Sin sincronizar'
-              : connected
-                ? 'En vivo'
-                : 'Reconectando'}
-          </span>
+          <div className="topbar-actions">
+            <span
+              className={`connection-pill ${live ? 'is-connected' : ''}`}
+              role="status"
+            >
+              {live ? (
+                <Signal size={15} aria-hidden="true" />
+              ) : (
+                <SignalZero size={15} aria-hidden="true" />
+              )}
+              {ordersError
+                ? 'Sin sincronizar'
+                : connected
+                  ? 'En vivo'
+                  : 'Reconectando'}
+            </span>
+
+            <div
+              className="session-user"
+              title={`${user.nombre} · ${
+                user.rol ? rolLabel[user.rol] : 'Sin rol'
+              }`}
+            >
+              <span className="session-avatar" aria-hidden="true">
+                {initials(user.nombre)}
+              </span>
+              <span className="session-meta">
+                <strong>{user.nombre}</strong>
+                <span>{user.rol ? rolLabel[user.rol] : 'Sin rol'}</span>
+              </span>
+            </div>
+
+            <button
+              type="button"
+              className="icon-button session-logout"
+              onClick={() => onLogout()}
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <LogOut size={18} aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -438,6 +487,61 @@ function App() {
       )}
     </>
   )
+}
+
+function App() {
+  const {
+    status,
+    user,
+    notice,
+    login,
+    register,
+    logout,
+    refreshUser,
+    clearNotice,
+  } = useAuth()
+
+  if (status === 'loading') {
+    return <AuthLoading />
+  }
+
+  if (status === 'anonymous' || !user) {
+    return (
+      <AuthScreen
+        notice={notice}
+        onLogin={login}
+        onRegister={register}
+        onClearNotice={clearNotice}
+      />
+    )
+  }
+
+  if (user.estado === 'BLOQUEADO') {
+    return <AccessDenied user={user} onLogout={logout} reason="blocked" />
+  }
+
+  if (user.estado === 'PENDIENTE' || !user.rol) {
+    return (
+      <PendingAccount
+        user={user}
+        onRefresh={refreshUser}
+        onLogout={logout}
+      />
+    )
+  }
+
+  if (user.rol !== 'ADMIN' && user.rol !== 'CAJA') {
+    return (
+      <AccessDenied
+        user={user}
+        onLogout={logout}
+        moduleName="la caja de pedidos"
+        allowedRoles="Administrador o Caja"
+      />
+    )
+  }
+
+  return <PedidosDashboard user={user} onLogout={logout} />
 }
 
 export default App

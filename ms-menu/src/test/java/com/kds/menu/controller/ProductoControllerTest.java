@@ -1,5 +1,6 @@
 package com.kds.menu.controller;
 
+import com.kds.menu.auth.security.JwtService;
 import com.kds.menu.dto.ProductoRequest;
 import com.kds.menu.exception.CategoriaNoEncontradaException;
 import com.kds.menu.exception.ProductoNoEncontradoException;
@@ -8,6 +9,7 @@ import com.kds.menu.model.Producto;
 import com.kds.menu.service.ProductoService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -33,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = ProductoController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class ProductoControllerTest {
 
     private static final String PRODUCTO_VALIDO_JSON = """
@@ -60,6 +63,13 @@ class ProductoControllerTest {
 
     @MockitoBean
     private ProductoService productoService;
+
+    /**
+     * El filtro de JWT se registra en el slice de pruebas, pero estas pruebas
+     * validan el contrato del controlador sin cadena de seguridad.
+     */
+    @MockitoBean
+    private JwtService jwtService;
 
     @Test
     void listarProductos_debeDevolver200ConElListado() throws Exception {

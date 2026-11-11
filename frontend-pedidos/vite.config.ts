@@ -25,6 +25,10 @@ export default defineConfig(({ mode }) => {
       target: menuTarget,
       changeOrigin: true,
     },
+    '/auth': {
+      target: menuTarget,
+      changeOrigin: true,
+    },
   }
 
   return {

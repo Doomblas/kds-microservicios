@@ -5,6 +5,11 @@ import type {
   Producto,
   ProductoPayload,
 } from '../types/menu'
+import {
+  authHeaders,
+  clearSession,
+  notifyUnauthorized,
+} from '../auth/session'
 
 const configuredBaseUrl = import.meta.env.VITE_MENU_API_URL?.trim()
 export const MENU_API_BASE_URL = (configuredBaseUrl || '/api').replace(/\/+$/, '')
@@ -41,6 +46,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
         headers: {
           Accept: 'application/json',
           ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+          ...authHeaders(),
           ...init.headers,
         },
       })
@@ -65,6 +71,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
         payload = (await response.json()) as ApiErrorPayload
       } catch {
         payload = null
+      }
+
+      if (response.status === 401) {
+        clearSession()
+        notifyUnauthorized()
       }
 
       throw new MenuApiError(
