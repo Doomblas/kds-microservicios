@@ -133,6 +133,15 @@ services:
     depends_on:
       - ms-display-cocina
 
+  frontend-pedidos:
+    build:
+      context: ./frontend-pedidos
+    ports:
+      - "5176:80"
+    depends_on:
+      - ms-pedidos
+      - ms-menu
+
 volumes:
   menu-db-data:
   cocina-db-data:

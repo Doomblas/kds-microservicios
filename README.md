@@ -16,6 +16,7 @@ docker compose -f compose.integration.yaml up --build -d
 ```
 
 - Frontend Cocina: <http://localhost:5175>
+- Frontend Pedidos (caja): <http://localhost:5176>
 - API Menu: <http://localhost:8081>
 - API Cocina: <http://localhost:8084/ordenes>
 - API Pedidos: <http://localhost:8085/pedidos>
