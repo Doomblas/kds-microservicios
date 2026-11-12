@@ -1,18 +1,20 @@
 # --- Etapa 1: Compilación interna en entorno aislado de Java 21 ---
+# La imagen oficial maven:3.9.9-eclipse-temurin-21 ya incluye Maven 3.9.9 y
+# JDK 21, por lo que se usa `mvn` en lugar de `./mvnw`. El wrapper descargaba
+# una distribución de Maven adicional (y al no existir `unzip` en la imagen
+# usaba la variante .tar.gz), lo que introducía un punto de fallo de red
+# innecesario. Spring Boot 4.1.2 no impone una versión mínima de Maven
+# superior a la incluida en la imagen.
 FROM maven:3.9.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# Copiar configuraciones de dependencias y el wrapper de Maven
+# Copiar solo el POM mantiene la capa de caché de dependencias.
 COPY pom.xml .
-COPY .mvn .mvn
-COPY mvnw .
+RUN mvn -B -q dependency:go-offline
 
-# Descargar las dependencias en caché para acelerar futuras compilaciones
-RUN ./mvnw -B -q dependency:go-offline
-
-# Compilar el código (Java 17) bajo el JDK 21 de la imagen de build
+# Compilar el código bajo el JDK 21 de la imagen de build
 COPY src src
-RUN ./mvnw -B -q package -DskipTests
+RUN mvn -B -q package -DskipTests
 
 # --- Etapa 2: Entorno de ejecución seguro y ligero de producción ---
 FROM eclipse-temurin:21-jre

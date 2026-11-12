@@ -1,3 +1,15 @@
+# Despliegue estandar del KDS. La compilacion usa la red por defecto de
+# Docker, que es la opcion portable y la que funciona en la mayoria de las
+# maquinas.
+#
+# Si la resolucion DNS falla DENTRO de los contenedores de compilacion
+# (tipico en Linux con systemd-resolved, donde el bridge no hereda el stub
+# resolver del host), existe un override opcional que compila en la red del
+# host: compose.integration.dns-fallback.yaml
+#
+#   docker compose -f compose.integration.yaml \
+#                  -f compose.integration.dns-fallback.yaml up --build -d
+#
 services:
   menu-db:
     image: postgres:16
