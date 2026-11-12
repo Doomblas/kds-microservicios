@@ -766,6 +766,24 @@ docker compose -f compose.integration.yaml up --build -d
 docker compose -f compose.integration.yaml ps
 ```
 
+> Antes del primer arranque hay que rellenar `ADMIN_EMAIL` y `ADMIN_PASSWORD`
+> en `.env`: si se dejan vacíos, `ms-menu` no crea ninguna cuenta `ADMIN` y
+> no se puede iniciar sesión.
+
+Si la compilación falla al descargar dependencias con `Unknown host
+repo.maven.apache.org` o `Temporary failure in name resolution`, el problema es
+la resolución DNS dentro de los contenedores de compilación (típico en Linux
+con `systemd-resolved`, donde el bridge no hereda el stub resolver del host).
+En ese caso existe un override opcional que compila en la red del host:
+
+```bash
+docker compose -f compose.integration.yaml \
+               -f compose.integration.dns-fallback.yaml up --build -d
+```
+
+Solo cambia la red de la fase de compilación; la red de ejecución, los
+puertos, las variables de entorno y los volúmenes son los mismos.
+
 URLs en esta configuración (se eligieron puertos alternativos para no chocar
 con servicios locales ya instalados):
 
