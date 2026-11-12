@@ -1,0 +1,201 @@
+# Despliegue estandar del KDS. La compilacion usa la red por defecto de
+# Docker, que es la opcion portable y la que funciona en la mayoria de las
+# maquinas.
+#
+# Si la resolucion DNS falla DENTRO de los contenedores de compilacion
+# (tipico en Linux con systemd-resolved, donde el bridge no hereda el stub
+# resolver del host), existe un override opcional que compila en la red del
+# host: compose.integration.dns-fallback.yaml
+#
+#   docker compose -f compose.integration.yaml \
+#                  -f compose.integration.dns-fallback.yaml up --build -d
+#
+services:
+  menu-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: menu_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-root}
+    ports:
+      - "5434:5432"
+    volumes:
+      - menu-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d menu_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  cocina-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: cocina_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-root}
+    ports:
+      - "5435:5432"
+    volumes:
+      - cocina-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cocina_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  pedidos-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pedidos_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-root}
+    ports:
+      - "5436:5432"
+    volumes:
+      - pedidos-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pedidos_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-cocina_app}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-root}
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ms-menu:
+    build:
+      context: ./ms-menu
+    environment:
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://menu-db:5432/menu_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      # Autenticación: ms-menu es el único emisor de tokens y guarda las cuentas.
+      JWT_SECRET: ${JWT_SECRET:-kds-dev-only-secret-change-me-please-2026}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-30}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrador KDS}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5174,http://localhost:5175,http://localhost:5176}
+    ports:
+      - "8081:8080"
+    depends_on:
+      menu-db:
+        condition: service_healthy
+
+  ms-pedidos:
+    build:
+      context: ./ms-pedidos
+      dockerfile: dockerfile
+    environment:
+      SERVER_PORT: 8082
+      DB_URL: jdbc:postgresql://pedidos-db:5432/pedidos_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-cocina_app}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-root}
+      RABBITMQ_VHOST: /
+      MENU_BASE_URL: http://ms-menu:8080
+      WS_ALLOWED_ORIGINS: "*"
+      # Mismo secreto que ms-menu: aquí solo se valida el JWT, sin acceso a la BD.
+      JWT_SECRET: ${JWT_SECRET:-kds-dev-only-secret-change-me-please-2026}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5174,http://localhost:5175,http://localhost:5176}
+    ports:
+      - "8085:8082"
+    depends_on:
+      pedidos-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ms-menu:
+        condition: service_started
+
+  ms-display-cocina:
+    build:
+      context: ./ms-display-cocina
+    environment:
+      SERVER_PORT: 8083
+      DB_URL: jdbc:postgresql://cocina-db:5432/cocina_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-root}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-cocina_app}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-root}
+      RABBITMQ_VHOST: /
+      WS_ALLOWED_ORIGINS: "*"
+      # Mismo secreto que ms-menu: aquí solo se valida el JWT, sin acceso a la BD.
+      JWT_SECRET: ${JWT_SECRET:-kds-dev-only-secret-change-me-please-2026}
+      CORS_ALLOWED_ORIGIN_PATTERNS: ${CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5174,http://localhost:5175,http://localhost:5176}
+    ports:
+      - "8084:8083"
+    depends_on:
+      cocina-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+    environment:
+      MS_MENU_URI: http://ms-menu:8080
+      MS_PEDIDOS_URI: http://ms-pedidos:8082
+      MS_DISPLAY_COCINA_URI: http://ms-display-cocina:8083
+      MS_PEDIDOS_WS_URI: ws://ms-pedidos:8082
+      MS_DISPLAY_COCINA_WS_URI: ws://ms-display-cocina:8083
+      GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS: "${GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5174,http://localhost:5175,http://localhost:5176}"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - ms-menu
+      - ms-pedidos
+      - ms-display-cocina
+
+  frontend-menu:
+    build:
+      context: ./frontend-menu
+    ports:
+      - "5174:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
+  frontend-cocina:
+    build:
+      context: ./frontend-cocina
+    ports:
+      - "5175:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
+  frontend-pedidos:
+    build:
+      context: ./frontend-pedidos
+    ports:
+      - "5176:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
+volumes:
+  menu-db-data:
+  cocina-db-data:
+  pedidos-db-data:
+  rabbitmq-data:

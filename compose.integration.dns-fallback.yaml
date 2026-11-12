@@ -1,0 +1,78 @@
+# -----------------------------------------------------------------------------
+# Override OPCIONAL de compose.integration.yaml — solo para maquinas Linux con
+# problemas de resolucion DNS dentro de los contenedores de compilacion.
+#
+# -----------------------------------------------------------------------------
+# QUE PROBLEMA RESUELVE
+# El host usa systemd-resolved (/etc/resolv.conf -> nameserver 127.0.0.53, un
+# stub local que reenvia las consultas). Docker NO hereda ese stub: copia al
+# contenedor los servidores DNS "de verdad" del host y, en redes corporativas,
+# estos suelen no resolver nombres publicos desde el rango del bridge. El
+# resultado durante el build es:
+#
+#   wget: unable to resolve host address 'repo.maven.apache.org'
+#
+# que impide descargar las dependencias de Maven y los paquetes de npm.
+#
+# QUE HACE ESTE FICHERO
+# Añade `build.network: host` a los siete servicios que compilan, de modo que
+# el contenedor de build usa la pila de red del host y su stub resolver, y por
+# tanto resuelve Maven Central y registry.npmjs.org con normalidad.
+#
+# Solo afecta a la FASE DE COMPILACION. No modifica la red de ejecucion, los
+# puertos, las variables de entorno, las bases de datos, los volumenes ni
+# ningun servicio: los contenedores de runtime siguen usando la red de Docker
+# y se resuelven entre si por el DNS embebido.
+#
+# COMO SE USA (siempre anadiendo este fichero DESPUES del principal, para que
+# el merge de Compose aplique el override):
+#
+#   docker compose -f compose.integration.yaml \
+#                  -f compose.integration.dns-fallback.yaml up --build -d
+#
+#   docker compose -f compose.integration.yaml \
+#                  -f compose.integration.dns-fallback.yaml build
+#
+#   docker compose -f compose.integration.yaml \
+#                  -f compose.integration.dns-fallback.yaml ps
+#
+# CUANDO USARLO
+#   - SOLO si al compilar falla la resolucion DNS (error "unable to resolve
+#     host address" o "Connection timed out" al descargar de Maven Central o
+#     de registry.npmjs.org).
+#   - En Docker Desktop (macOS y Windows) NO hace falta: la red de las
+#     maquinas virtuales de Docker Desktop ya resuelve correctamente.
+#   - Si el daemon no permite red de host en builds (driver docker-container en
+#     entornos rootless), la alternativa es configurar el DNS del daemon en
+#     /etc/docker/daemon.json con "dns": ["8.8.8.8", "1.1.1.1"] y reiniciar
+#     Docker; ese ajuste es del host, no del repositorio.
+#
+# -----------------------------------------------------------------------------
+services:
+  ms-menu:
+    build:
+      network: host
+
+  ms-pedidos:
+    build:
+      network: host
+
+  ms-display-cocina:
+    build:
+      network: host
+
+  api-gateway:
+    build:
+      network: host
+
+  frontend-menu:
+    build:
+      network: host
+
+  frontend-cocina:
+    build:
+      network: host
+
+  frontend-pedidos:
+    build:
+      network: host

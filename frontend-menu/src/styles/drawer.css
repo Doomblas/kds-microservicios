@@ -1,0 +1,432 @@
+/* ── Capa y panel del drawer ─────────────────────────────── */
+
+.drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+  visibility: hidden;
+  transition: visibility 0s linear 280ms;
+}
+
+.drawer-layer.is-open {
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 31, 24, 0.42);
+  opacity: 0;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  transition: opacity 280ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.drawer-layer.is-open .drawer-backdrop {
+  opacity: 1;
+}
+
+.drawer-panel {
+  position: relative;
+  width: min(480px, 100%);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-line);
+  box-shadow: -30px 0 80px -40px rgba(15, 31, 24, 0.55);
+  transform: translateX(100%);
+  transition: transform 280ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.drawer-layer.is-open .drawer-panel {
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-layer,
+  .drawer-panel,
+  .drawer-backdrop {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Cabecera ────────────────────────────────────────────── */
+
+.drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 26px 28px 20px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.drawer-eyebrow {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: var(--color-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.drawer-header h2 {
+  margin: 0;
+  color: var(--color-forest);
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+
+.drawer-header p {
+  margin: 7px 0 0;
+  color: var(--color-muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.drawer-close {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  margin: -2px -6px 0 0;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    color var(--transition);
+}
+
+.drawer-close:hover:not(:disabled) {
+  border-color: var(--color-forest);
+  background: var(--color-surface-muted);
+  color: var(--color-forest);
+}
+
+/* ── Contenido y footer ──────────────────────────────────── */
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px 28px;
+}
+
+.drawer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 28px;
+  border-top: 1px solid var(--color-line);
+  background: #fbfcf8;
+}
+
+.drawer-submit {
+  min-width: 150px;
+}
+
+.drawer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.drawer-note {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+/* ── Campos ──────────────────────────────────────────────── */
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.form-field > label {
+  color: var(--color-forest);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.required-mark {
+  margin-left: 3px;
+  color: var(--color-terracotta);
+}
+
+.form-field input,
+.form-field textarea,
+.form-field select {
+  width: 100%;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12.5px;
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition),
+    background var(--transition);
+}
+
+.form-field input,
+.form-field select {
+  height: 44px;
+  padding: 0 13px;
+}
+
+.form-field textarea {
+  padding: 11px 13px;
+  resize: vertical;
+  min-height: 92px;
+  line-height: 1.55;
+}
+
+.form-field input::placeholder,
+.form-field textarea::placeholder {
+  color: #929c95;
+}
+
+.form-field input:hover:not(:disabled),
+.form-field textarea:hover:not(:disabled),
+.form-field select:hover:not(:disabled) {
+  border-color: #b8bfb3;
+}
+
+.form-field input:focus-visible,
+.form-field textarea:focus-visible,
+.form-field select:focus-visible {
+  outline: none;
+  border-color: var(--color-forest);
+  box-shadow: 0 0 0 3px rgba(23, 63, 50, 0.1);
+}
+
+.form-field input[aria-invalid='true'],
+.form-field textarea[aria-invalid='true'],
+.form-field select[aria-invalid='true'] {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px rgba(186, 26, 26, 0.08);
+}
+
+.form-field input:disabled,
+.form-field textarea:disabled,
+.form-field select:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+}
+
+.field-error {
+  color: var(--color-error);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.field-support {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.char-count {
+  color: var(--color-muted);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.char-count.is-over {
+  color: var(--color-error);
+}
+
+.input-with-prefix {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
+}
+
+.input-with-prefix:focus-within {
+  border-color: var(--color-forest);
+  box-shadow: 0 0 0 3px rgba(23, 63, 50, 0.1);
+}
+
+.input-with-prefix > span {
+  padding-left: 13px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.input-with-prefix input {
+  border: 0;
+  box-shadow: none !important;
+  background: transparent;
+  padding-left: 5px;
+}
+
+.select-wrap {
+  position: relative;
+}
+
+.select-wrap select {
+  appearance: none;
+  padding-right: 38px;
+  cursor: pointer;
+}
+
+.select-wrap > svg {
+  position: absolute;
+  top: 50%;
+  right: 13px;
+  transform: translateY(-50%);
+  color: var(--color-muted);
+  pointer-events: none;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* ── Alertas y switch del formulario ─────────────────────── */
+
+.form-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.form-alert > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.form-alert strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11.5px;
+}
+
+.form-alert p {
+  margin: 0;
+}
+
+.form-alert.is-warning {
+  border-color: rgba(244, 183, 64, 0.45);
+  background: #fff9ea;
+  color: #7a5612;
+}
+
+.form-alert.is-error {
+  border-color: rgba(186, 26, 26, 0.2);
+  background: #fff7f5;
+  color: var(--color-error);
+}
+
+.form-alert.is-conflict {
+  border-color: rgba(244, 183, 64, 0.5);
+  background: #fff9ea;
+  color: #7a5612;
+}
+
+.form-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.form-switch-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.form-switch-row strong {
+  color: var(--color-forest);
+  font-size: 11.5px;
+}
+
+.form-switch-row span {
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.form-switch {
+  width: 46px;
+  height: 26px;
+}
+
+.form-switch .switch-thumb {
+  width: 20px;
+  height: 20px;
+}
+
+.form-switch.is-on .switch-thumb {
+  transform: translateX(20px);
+}
+
+@media (max-width: 560px) {
+  .drawer-panel {
+    width: 100%;
+  }
+
+  .drawer-header {
+    padding: 20px 20px 16px;
+  }
+
+  .drawer-header h2 {
+    font-size: 24px;
+  }
+
+  .drawer-body {
+    padding: 20px;
+  }
+
+  .drawer-footer {
+    padding: 14px 20px;
+  }
+
+  .drawer-footer .btn {
+    flex: 1;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

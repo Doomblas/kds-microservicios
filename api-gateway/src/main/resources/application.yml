@@ -1,0 +1,72 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: ms-menu-productos
+              uri: "${MS_MENU_URI:http://localhost:8081}"
+              predicates:
+                - Path=/productos,/productos/**
+
+            - id: ms-menu-categorias
+              uri: "${MS_MENU_URI:http://localhost:8081}"
+              predicates:
+                - Path=/categorias,/categorias/**
+
+            # Autenticación y administración de usuarios viven en ms-menu,
+            # que es el servicio administrativo existente. El Gateway solo
+            # enruta; no se convierte en un microservicio de negocio.
+            - id: ms-menu-auth
+              uri: "${MS_MENU_URI:http://localhost:8081}"
+              predicates:
+                - Path=/auth,/auth/**
+
+            - id: ms-menu-usuarios
+              uri: "${MS_MENU_URI:http://localhost:8081}"
+              predicates:
+                - Path=/usuarios,/usuarios/**
+
+            - id: ms-pedidos-rest
+              uri: "${MS_PEDIDOS_URI:http://localhost:8085}"
+              predicates:
+                - Path=/pedidos,/pedidos/**
+
+            - id: ms-display-cocina-rest
+              uri: "${MS_DISPLAY_COCINA_URI:http://localhost:8084}"
+              predicates:
+                - Path=/ordenes,/ordenes/**
+
+            # Ambos backends exponen /ws. El Gateway publica rutas distintas
+            # y reescribe al /ws que cada backend ya espera.
+            - id: ms-pedidos-ws
+              uri: "${MS_PEDIDOS_WS_URI:ws://localhost:8085}"
+              predicates:
+                - Path=/ws/pedidos,/ws/pedidos/**
+              filters:
+                - 'RewritePath=/ws/pedidos(?<segment>/?.*), /ws$\{segment}'
+
+            - id: ms-display-cocina-ws
+              uri: "${MS_DISPLAY_COCINA_WS_URI:ws://localhost:8084}"
+              predicates:
+                - Path=/ws/cocina,/ws/cocina/**
+              filters:
+                - 'RewritePath=/ws/cocina(?<segment>/?.*), /ws$\{segment}'
+
+gateway:
+  cors:
+    allowed-origin-patterns: "${GATEWAY_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:5174,http://localhost:5175,http://localhost:5176}"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

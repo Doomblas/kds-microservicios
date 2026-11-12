@@ -1,0 +1,23 @@
+Metodologia de medicion de la propagacion de eventos del KDS
+=====================================================================
+
+1. Entorno de ejecucion
+   La medicion se realizo sobre el prototipo academico del Kitchen Display System, desplegado mediante Docker Compose y compuesto por los servicios ms-menu, ms-pedidos, ms-display-cocina y api-gateway, un broker RabbitMQ y tres bases de datos PostgreSQL independientes. Todas las peticiones de la herramienta se dirigieron al API Gateway (http://localhost:8080), de modo que la medicion incluye el comportamiento real del gateway y no solo el de los microservicios internos.
+
+2. Autenticacion
+   La herramienta se autentico mediante POST /auth/login con un usuario de rol ADMIN suministrado por variables de entorno. Ninguna credencial queda almacenada en el repositorio. El token JWT obtenido se compartio en las peticiones posteriores hacia ms-pedidos y ms-display-cocina.
+
+3. Escenarios y numero de pruebas
+   Se evaluaron tres escenarios de propagacion de eventos: (a) pedido nuevo, desde la creacion del pedido en ms-pedidos hasta que la orden aparece en ms-display-cocina; (b) cambio a PREPARANDO, desde la actualizacion de la orden en ms-display-cocina hasta que ms-pedidos refleja ese estado; y (c) cambio a LISTO, con el mismo procedimiento que el escenario anterior. Cada iteracion ejecuta la secuencia completa pedido nuevo -> PREPARANDO -> LISTO, de modo que se obtienen 20 muestras por escenario (60 mediciones en total).
+
+4. Instrumentacion temporal
+   Los instantes de referencia se midieron con System.nanoTime(), un reloj monotono de alta resolucion e independiente de los ajustes del reloj del sistema. El instante inicial (t0) se toma inmediatamente antes de enviar la peticion HTTP que origina el evento (POST /pedidos o PATCH /ordenes/{id}/estado) y el instante final (t1) es el momento en que la respuesta que ya refleja el estado esperado es recibida por el cliente. La latencia se define como t1 - t0 y se expresa en milisegundos con tres decimales. No se utiliza el tiempo de respuesta HTTP de la peticion original como metrica, sino el tiempo hasta que el estado es observable en el servicio consumidor, de modo que se mide la propagacion funcional completa (persistencia, publicacion en RabbitMQ, consumo y persistencia en el servicio destino).
+
+5. Deteccion de la propagacion
+   La aparicion del estado esperado se detecto mediante sondeo (polling) corto y controlado, con un intervalo de 10 ms y un tiempo de espera maximo de 10000 ms por evento. El sondeo se detiene de inmediato en cuanto se observa el estado esperado, por lo que la latencia reportada incluye, como maximo, un ciclo de sondeo adicional. La correlacion entre el pedido de ms-pedidos y la orden de ms-display-cocina se realizo mediante el identificador pedidoId, que el broker transporta en los eventos pedido.creado y pedido.estado.actualizado.
+
+6. Indicadores y tratamiento de los datos
+   El porcentaje de exito se calculo como el cociente entre el numero de pruebas en las que se detecto la propagacion dentro del tiempo de espera y el total de pruebas ejecutadas del escenario, expresado en porcentaje. Las metricas de latencia (media, minima, maxima, mediana y desviacion estandar muestral) se calcularon unicamente sobre las pruebas exitosas; las pruebas fallidas se contabilizan en el porcentaje de exito y quedan excluidas del calculo de latencia, sin asignarles ningun valor estimado.
+
+7. Naturaleza de los datos
+   Las mediciones corresponden a un prototipo academico ejecutado en un entorno simulado y controlado. Los pedidos creados durante la campana de medicion permanecen en las bases de datos del prototipo, ya que el contrato REST no expone un endpoint de eliminacion de pedidos; su identificador (id y numeroPedido) queda registrado en el fichero de detalle latencias_detalle.csv.
