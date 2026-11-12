@@ -60,6 +60,7 @@ function PedidosDashboard({ user, onLogout }: PedidosDashboardProps) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<EstadoPedido | 'TODOS'>('TODOS')
   const [loadingCatalog, setLoadingCatalog] = useState(true)
+  const [refreshingCatalog, setRefreshingCatalog] = useState(false)
   const [loadingOrders, setLoadingOrders] = useState(true)
   const [refreshingOrders, setRefreshingOrders] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -69,8 +70,9 @@ function PedidosDashboard({ user, onLogout }: PedidosDashboardProps) {
   const [toast, setToast] = useState<Toast | null>(null)
   const [now, setNow] = useState(Date.now())
 
-  const loadCatalog = useCallback(async () => {
-    setLoadingCatalog(true)
+  const loadCatalog = useCallback(async (quiet = false) => {
+    if (quiet) setRefreshingCatalog(true)
+    else setLoadingCatalog(true)
     try {
       const data = await menuCatalogApi.getProductos()
       setProductos(Array.isArray(data) ? data : [])
@@ -81,6 +83,7 @@ function PedidosDashboard({ user, onLogout }: PedidosDashboardProps) {
       )
     } finally {
       setLoadingCatalog(false)
+      setRefreshingCatalog(false)
     }
   }, [])
 
@@ -122,6 +125,15 @@ function PedidosDashboard({ user, onLogout }: PedidosDashboardProps) {
     return () => window.clearTimeout(timeout)
   }, [toast])
 
+  // Si el WebSocket cae (LAN/Gateway), seguir sincronizando estados por REST.
+  useEffect(() => {
+    if (connected) return
+    const poll = window.setInterval(() => {
+      void loadOrders(true)
+    }, 8_000)
+    return () => window.clearInterval(poll)
+  }, [connected, loadOrders])
+
   useEffect(() => {
     const client = new Client({
       brokerURL: wsUrl(),
@@ -133,19 +145,33 @@ function PedidosDashboard({ user, onLogout }: PedidosDashboardProps) {
         client.subscribe('/topic/pedidos', (message: IMessage) => {
           try {
             const event = JSON.parse(message.body) as NotificacionCaja
-            if (event.tipo !== 'ESTADO_ACTUALIZADO') return
-            setPedidos((current) =>
-              current.map((pedido) =>
-                pedido.id === event.pedidoId
+            const tipo = String(event.tipo ?? '')
+            if (tipo && tipo !== 'ESTADO_ACTUALIZADO') return
+
+            const pedidoId = Number(event.pedidoId)
+            if (!Number.isFinite(pedidoId)) {
+              void loadOrders(true)
+              return
+            }
+
+            setPedidos((current) => {
+              const exists = current.some((pedido) => pedido.id === pedidoId)
+              if (!exists) {
+                void loadOrders(true)
+                return current
+              }
+              return current.map((pedido) =>
+                pedido.id === pedidoId
                   ? { ...pedido, estado: event.estado }
                   : pedido,
-              ),
-            )
+              )
+            })
             setToast({
               kind: 'info',
               message: `${event.numeroPedido} pasó a ${event.estado}.`,
             })
           } catch {
+            void loadOrders(true)
             setToast({
               kind: 'error',
               message: 'No se pudo leer una notificación de caja.',
@@ -423,7 +449,11 @@ function PedidosDashboard({ user, onLogout }: PedidosDashboardProps) {
             cart={cart}
             query={query}
             loading={loadingCatalog}
+            refreshing={refreshingCatalog}
             onQueryChange={setQuery}
+            onRefresh={() => {
+              void loadCatalog(true)
+            }}
             onAdd={(producto) => upsertCart(producto, 1)}
             onDecrease={(productoId) => changeQuantity(productoId, -1)}
           />

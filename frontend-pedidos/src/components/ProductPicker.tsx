@@ -1,4 +1,4 @@
-import { Minus, Plus, Search, UtensilsCrossed } from 'lucide-react'
+import { Minus, Plus, RefreshCw, Search, UtensilsCrossed } from 'lucide-react'
 import type { CartItem, ProductoMenu } from '../types/pedidos'
 import { formatPrice } from '../utils/format'
 
@@ -7,7 +7,9 @@ interface ProductPickerProps {
   cart: CartItem[]
   query: string
   loading: boolean
+  refreshing: boolean
   onQueryChange: (value: string) => void
+  onRefresh: () => void
   onAdd: (producto: ProductoMenu) => void
   onDecrease: (productoId: number) => void
 }
@@ -17,7 +19,9 @@ export function ProductPicker({
   cart,
   query,
   loading,
+  refreshing,
   onQueryChange,
+  onRefresh,
   onAdd,
   onDecrease,
 }: ProductPickerProps) {
@@ -42,18 +46,34 @@ export function ProductPicker({
           <h2 id="catalog-title">Catálogo</h2>
           <p>Productos disponibles desde ms-menu.</p>
         </div>
-        <div className="search-box">
-          <Search size={18} aria-hidden="true" />
-          <label className="sr-only" htmlFor="product-search">
-            Buscar producto
-          </label>
-          <input
-            id="product-search"
-            type="search"
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Buscar producto o categoría…"
-          />
+        <div className="catalog-toolbar">
+          <div className="search-box">
+            <Search size={18} aria-hidden="true" />
+            <label className="sr-only" htmlFor="product-search">
+              Buscar producto
+            </label>
+            <input
+              id="product-search"
+              type="search"
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Buscar producto o categoría…"
+            />
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={onRefresh}
+            disabled={refreshing || loading}
+            aria-label="Actualizar catálogo"
+            title="Actualizar catálogo desde ms-menu"
+          >
+            <RefreshCw
+              size={18}
+              className={refreshing ? 'spin' : undefined}
+              aria-hidden="true"
+            />
+          </button>
         </div>
       </div>
 
