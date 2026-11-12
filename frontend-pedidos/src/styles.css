@@ -174,6 +174,10 @@ ul { list-style: none; margin: 0; padding: 0; }
 .panel-heading h2 { font-size: 22px; letter-spacing: -0.4px; color: var(--color-forest-deep); }
 .panel-heading p { margin-top: 6px; color: var(--color-muted); font-size: 13px; }
 
+.catalog-toolbar {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+
 .search-box {
   display: flex; align-items: center; gap: 10px; min-width: 220px; min-height: 44px;
   padding: 0 12px; color: #5f6e64; border: 1px solid transparent; border-radius: var(--radius-md);
@@ -328,7 +332,8 @@ ul { list-style: none; margin: 0; padding: 0; }
 
 @media (max-width: 720px) {
   .panel-heading { flex-direction: column; }
-  .search-box { width: 100%; }
+  .catalog-toolbar { width: 100%; }
+  .search-box { width: 100%; flex: 1; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .error-banner { flex-direction: column; }
   .retry-button { margin-left: 0; }
