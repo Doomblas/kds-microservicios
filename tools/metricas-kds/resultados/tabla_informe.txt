@@ -1,0 +1,7 @@
+Tabla 3. Registro de pruebas de propagacion de eventos.
+
+Escenario              | Pruebas  | Latencia media (ms)  | Exito (%)
+-----------------------+----------+----------------------+------------
+Pedido nuevo           | 20       | 27.02                | 100.00
+Cambio a PREPARANDO    | 20       | 19.01                | 100.00
+Cambio a LISTO         | 20       | 20.23                | 100.00

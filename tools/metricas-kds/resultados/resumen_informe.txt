@@ -1,0 +1,18 @@
+Resumen de la medicion de propagacion de eventos del KDS
+=====================================================================
+
+Se realizaron 20 pruebas para cada uno de los tres escenarios de propagacion evaluados (pedido nuevo, cambio a PREPARANDO y cambio a LISTO), es decir 60 mediciones en total sobre el prototipo academico del KDS desplegado en un entorno controlado.
+
+En el escenario de pedido nuevo, la latencia media de propagacion desde ms-pedidos hasta ms-display-cocina (a traves del API Gateway y del broker RabbitMQ) fue de 27.02 ms, con un 100.00 % de pruebas exitosas (20 de 20).
+
+En el escenario de cambio a PREPARANDO, la latencia media desde ms-display-cocina hasta ms-pedidos fue de 19.01 ms, con un 100.00 % de pruebas exitosas (20 de 20).
+
+En el escenario de cambio a LISTO, la latencia media desde ms-display-cocina hasta ms-pedidos fue de 20.23 ms, con un 100.00 % de pruebas exitosas (20 de 20).
+
+El escenario con mayor latencia media fue Pedido nuevo (27.02 ms) y el de menor latencia media fue Cambio a PREPARANDO (19.01 ms).
+
+No se registraron fallos: las 60 mediciones completaron el flujo de propagacion dentro del tiempo de espera configurado, lo que indica que los dos sentidos del flujo asincrono (Pedidos -> Cocina y Cocina -> Pedidos) se comportaron de forma consistente durante la campana de medicion.
+
+En terminos de comportamiento observado, los tres escenarios presentan tiempos del mismo orden de magnitud, lo que sugiere que el coste dominante de la propagacion es el transporte a traves del broker y la persistencia en el servicio consumidor, y no un unico eslabon especialmente lento. Las diferencias entre el escenario de pedido nuevo y los de cambio de estado deben interpretarse con cautela, porque el intervalo de sondeo usado para detectar la propagacion introduce una resolucion de medida que puede ser comparable a las diferencias observadas.
+
+Los resultados corresponden exclusivamente a un prototipo academico ejecutado en un entorno simulado y controlado, con la red local y los recursos de una sola estacion de trabajo. No representan el comportamiento de un restaurante real en produccion ni permiten afirmar mejoras operativas en ningun establecimiento.
