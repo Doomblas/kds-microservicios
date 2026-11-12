@@ -1,0 +1,43 @@
+{
+  "herramienta" : "metricas-kds",
+  "descripcion" : "Medicion automatica de propagacion de eventos del KDS (Pedidos -> RabbitMQ -> Cocina y Cocina -> RabbitMQ -> Pedidos)",
+  "fechaEjecucion" : "2026-11-11T19:00:02.887713807",
+  "baseUrl" : "http://localhost:8080",
+  "numPruebasPorEscenario" : 20,
+  "timeoutMs" : 10000,
+  "intervaloSondeoMs" : 10,
+  "escenarios" : [ {
+    "escenario" : "Pedido nuevo",
+    "pruebas" : 20,
+    "exitos" : 20,
+    "fallos" : 0,
+    "exitoPct" : 100.0,
+    "latenciaMediaMs" : 27.021,
+    "minMs" : 20.142,
+    "maxMs" : 41.781,
+    "medianaMs" : 24.665,
+    "desviacionMs" : 6.656
+  }, {
+    "escenario" : "Cambio a PREPARANDO",
+    "pruebas" : 20,
+    "exitos" : 20,
+    "fallos" : 0,
+    "exitoPct" : 100.0,
+    "latenciaMediaMs" : 19.013,
+    "minMs" : 15.648,
+    "maxMs" : 22.672,
+    "medianaMs" : 18.896,
+    "desviacionMs" : 1.904
+  }, {
+    "escenario" : "Cambio a LISTO",
+    "pruebas" : 20,
+    "exitos" : 20,
+    "fallos" : 0,
+    "exitoPct" : 100.0,
+    "latenciaMediaMs" : 20.227,
+    "minMs" : 16.705,
+    "maxMs" : 36.068,
+    "medianaMs" : 18.532,
+    "desviacionMs" : 5.456
+  } ]
+}

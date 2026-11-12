@@ -1,0 +1,4 @@
+escenario,pruebas,exitos,fallos,exito_pct,latencia_media_ms,min_ms,max_ms,mediana_ms,desviacion_ms
+Pedido nuevo,20,20,0,100.00,27.021,20.142,41.781,24.665,6.656
+Cambio a PREPARANDO,20,20,0,100.00,19.013,15.648,22.672,18.896,1.904
+Cambio a LISTO,20,20,0,100.00,20.227,16.705,36.068,18.532,5.456

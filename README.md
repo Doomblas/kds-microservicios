@@ -100,3 +100,21 @@ Para la siguiente etapa, consultar la
 El Compose anterior es para **una sola máquina**: no configura automáticamente
 las conexiones de red entre tres equipos.
 Las claves de `.env.example` son únicamente para desarrollo local/exposición.
+
+## Herramienta de métricas de propagación (herramienta de pruebas, no microservicio)
+
+`tools/metricas-kds/` es una utilidad de línea de comandos en Java 21 que mide de
+forma automática la latencia de propagación de eventos del KDS (pedido nuevo,
+cambio a PREPARANDO y cambio a LISTO) a través del API Gateway, y genera los
+artefactos del informe (CSV, JSON, gráficas PNG y textos). **No es un
+microservicio**: no se despliega con Docker Compose ni se añade al Gateway.
+
+```bash
+cd tools/metricas-kds
+JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
+KDS_ADMIN_EMAIL=... KDS_ADMIN_PASSWORD=... KDS_NUM_PRUEBAS=20 \
+./run.sh
+```
+
+Los resultados se escriben en `tools/metricas-kds/resultados/`. Detalles en
+[`tools/metricas-kds/README.md`](tools/metricas-kds/README.md).
